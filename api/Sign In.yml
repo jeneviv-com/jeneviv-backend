@@ -1,0 +1,102 @@
+info:
+  name: Sign In
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{api}}/api/auth/sign-in/email"
+  headers:
+    - name: Origin
+      value: "{{api}}"
+    - name: content-type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "email": "{{auth_email}}",
+        "password": "{{auth_password}}"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const accessToken = res.body && res.body.token;
+        if (accessToken) {
+          bru.setEnvVar("access_token", accessToken);
+          bru.setEnvVar("refresh_token", res.body.refreshToken || accessToken);
+        }
+
+        const rawSetCookieHeader = res.headers && (res.headers["set-cookie"] || res.headers["Set-Cookie"]);
+        const setCookieHeader = Array.isArray(rawSetCookieHeader)
+          ? rawSetCookieHeader.join("; ")
+          : rawSetCookieHeader
+            ? String(rawSetCookieHeader)
+            : "";
+
+        if (setCookieHeader) {
+          const sessionCookieMatch = setCookieHeader.match(/(?:__Secure-)?better-auth\.session_token=[^;]+/);
+          if (sessionCookieMatch) {
+            bru.setEnvVar("session_cookie", sessionCookieMatch[0]);
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/auth/sign-in/email"
+      method: POST
+      headers:
+        - name: Origin
+          value: "{{api}}"
+        - name: content-type
+          value: application/json
+      body:
+        type: json
+        data: |-
+          {
+            "email": "{{auth_email}}",
+            "password": "{{auth_password}}"
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: x-powered-by
+          value: Express
+        - name: content-type
+          value: application/json
+        - name: set-cookie
+          value: better-auth.session_token=cwYPL8whsgq2qsjhJ9am2T88EE14u53F.Z3JZe3uVMwwMGM2ELdKHkxoSzhHVsnsMPl0%2FrtIHZzs%3D; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax
+        - name: date
+          value: Sat, 23 May 2026 21:43:22 GMT
+        - name: connection
+          value: keep-alive
+        - name: keep-alive
+          value: timeout=5
+        - name: transfer-encoding
+          value: chunked
+      body:
+        type: json
+        data: |-
+          {
+            "redirect": false,
+            "token": "cwYPL8whsgq2qsjhJ9am2T88EE14u53F",
+            "user": {
+              "name": "Test User",
+              "email": "test1@example.com",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2026-05-23T21:36:02.363Z",
+              "updatedAt": "2026-05-23T21:36:02.363Z",
+              "id": "vJFdFxkrnBQZ3hdQyOpAjAcsp8YfBQGa"
+            }
+          }

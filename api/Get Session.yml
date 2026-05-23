@@ -1,0 +1,66 @@
+info:
+  name: Get Session
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{api}}/api/auth/get-session"
+  headers:
+    - name: Authorization
+      value: Bearer {{access_token}}
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/auth/get-session"
+      method: GET
+      headers:
+        - name: Authorization
+          value: Bearer {{access_token}}
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: x-powered-by
+          value: Express
+        - name: content-type
+          value: application/json
+        - name: date
+          value: Sat, 23 May 2026 21:36:27 GMT
+        - name: connection
+          value: keep-alive
+        - name: keep-alive
+          value: timeout=5
+        - name: transfer-encoding
+          value: chunked
+      body:
+        type: json
+        data: |-
+          {
+            "session": {
+              "expiresAt": "2026-05-30T21:36:02.389Z",
+              "token": "BuSpxoeTcfWt836XLdpZCj3BYp1CD5M7",
+              "createdAt": "2026-05-23T21:36:02.389Z",
+              "updatedAt": "2026-05-23T21:36:02.389Z",
+              "ipAddress": "",
+              "userAgent": "bruno-runtime/3.3.0",
+              "userId": "vJFdFxkrnBQZ3hdQyOpAjAcsp8YfBQGa",
+              "id": "NGU9K89Dd8WgueTEBf3SWxRBsX3FDxiZ"
+            },
+            "user": {
+              "name": "Test User",
+              "email": "test1@example.com",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2026-05-23T21:36:02.363Z",
+              "updatedAt": "2026-05-23T21:36:02.363Z",
+              "id": "vJFdFxkrnBQZ3hdQyOpAjAcsp8YfBQGa"
+            }
+          }

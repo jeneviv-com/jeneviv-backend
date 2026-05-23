@@ -1,0 +1,45 @@
+info:
+  name: Health
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{api}}/health"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/health"
+      method: GET
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: x-powered-by
+          value: Express
+        - name: content-type
+          value: application/json; charset=utf-8
+        - name: content-length
+          value: "15"
+        - name: etag
+          value: W/"f-VaSQ4oDUiZblZNAEkkN+sX+q3Sg"
+        - name: date
+          value: Sat, 23 May 2026 21:23:21 GMT
+        - name: connection
+          value: keep-alive
+        - name: keep-alive
+          value: timeout=5
+      body:
+        type: json
+        data: |-
+          {
+            "status": "ok"
+          }

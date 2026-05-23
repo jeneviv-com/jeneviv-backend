@@ -1,0 +1,16 @@
+name: dev
+variables:
+  - name: api
+    value: http://localhost:3300
+  - name: auth_email
+    value: test1@example.com
+  - name: auth_password
+    value: passwor
+  - name: auth_name
+    value: Test User
+  - name: access_token
+    value: ""
+  - name: refresh_token
+    value: ""
+  - name: session_cookie
+    value: ""
