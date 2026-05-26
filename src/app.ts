@@ -7,9 +7,22 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auth } from "./auth.js";
+import { env } from "./env.js";
+import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import { webhookRawBody } from "./middleware/raw-body.js";
+import { adminRouter } from "./modules/admin/routes.js";
+import { banksRouter } from "./modules/banks/routes.js";
+import { collectionsRouter } from "./modules/collections/routes.js";
+import { jobsRouter } from "./modules/jobs/routes.js";
+import { merchantsRouter } from "./modules/merchants/routes.js";
+import { paymentsRouter } from "./modules/payments/routes.js";
+import { payoutsRouter } from "./modules/payouts/routes.js";
+import { templatesRouter } from "./modules/templates/routes.js";
+import { transactionsRouter } from "./modules/transactions/routes.js";
+import { uploadsRouter } from "./modules/uploads/routes.js";
+import { webhooksRouter } from "./modules/webhooks/routes.js";
 
 const app = express();
-const port = Number(process.env.PORT ?? 3300);
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(currentDir, "../public");
@@ -20,12 +33,29 @@ if (existsSync(publicDir)) {
 
 app.all("/api/auth", toNodeHandler(auth));
 app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+app.use("/api/webhooks", webhookRawBody, webhooksRouter);
+
 app.use(express.json());
 
 app.get("/health", (_request, response) => {
   response.json({ status: "ok" });
 });
 
-app.listen(port, () => {
-  console.log(`[START] JENEVIV BACKEND server listening on port ${port}`);
+app.use("/api/merchants", merchantsRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/banks", banksRouter);
+app.use("/api/templates", templatesRouter);
+app.use("/api/collections", collectionsRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/transactions", transactionsRouter);
+app.use("/api/payouts", payoutsRouter);
+app.use("/api/uploads", uploadsRouter);
+app.use("/api/jobs", jobsRouter);
+
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+app.listen(env.PORT, () => {
+  console.log(`[START] JENEVIV BACKEND server listening on port ${env.PORT}`);
 });

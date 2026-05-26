@@ -1,0 +1,25 @@
+info:
+  name: Suspend Merchant
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{api}}/api/admin/merchants/{{merchant_id}}/suspend"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "note": "Customer complaints under investigation."
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

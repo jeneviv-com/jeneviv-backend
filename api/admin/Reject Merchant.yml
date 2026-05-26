@@ -1,0 +1,25 @@
+info:
+  name: Reject Merchant
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{api}}/api/admin/merchants/{{merchant_id}}/reject"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "note": "Application incomplete: missing business registration."
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

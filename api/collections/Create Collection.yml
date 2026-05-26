@@ -1,0 +1,39 @@
+info:
+  name: Create Collection
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{api}}/api/collections"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "CSC318 Manual",
+        "description": "Hardcopy manual for CSC318",
+        "amount": 250000,
+        "currency": "NGN",
+        "template_id": "{{template_id}}"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const c = res.body && res.body.collection;
+        if (c) {
+          bru.setEnvVar("collection_id", c.id);
+          bru.setEnvVar("collection_short_code", c.shortCode);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

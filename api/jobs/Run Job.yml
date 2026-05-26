@@ -1,0 +1,21 @@
+info:
+  name: Run Job
+  type: http
+  seq: 2
+
+# Configure this URL as a Railway cron job target using the
+# cron expression from /api/jobs. Auth uses a shared CRON_SECRET
+# env var (Bearer token).
+
+http:
+  method: POST
+  url: "{{api}}/api/jobs/settle-wallet/run"
+  headers:
+    - name: Authorization
+      value: "Bearer {{cron_secret}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

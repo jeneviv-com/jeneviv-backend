@@ -1,0 +1,37 @@
+info:
+  name: Initiate Payout
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{api}}/api/payouts"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "bank_account_id": "{{bank_account_id}}",
+        "amount": 50000,
+        "currency": "NGN"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const p = res.body && res.body.payout;
+        if (p) {
+          bru.setEnvVar("payout_id", p.id);
+          bru.setEnvVar("payout_gateway_ref", p.gatewayRef);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,30 @@
+info:
+  name: Sign Upload
+  type: http
+  seq: 1
+
+# Returns signed Cloudinary upload parameters. The client then POSTs the
+# file directly to `upload_url` as multipart/form-data with the returned
+# api_key, timestamp, signature, and (optionally) folder fields.
+
+http:
+  method: POST
+  url: "{{api}}/api/uploads/sign"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "folder": "collections",
+        "resource_type": "auto"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

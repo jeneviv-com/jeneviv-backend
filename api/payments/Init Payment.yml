@@ -1,0 +1,44 @@
+info:
+  name: Init Payment
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{api}}/api/payments/init"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "collection_short_code": "{{collection_short_code}}",
+        "field_values": {
+          "student_name": "Jane Customer",
+          "class": "JSS1",
+          "parent_phone": "+2348000000000"
+        }
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const tx = res.body && res.body.transaction;
+        const acct = res.body && res.body.payment_account;
+        if (tx) {
+          bru.setEnvVar("transaction_id", tx.id);
+          bru.setEnvVar("transaction_reference", tx.reference);
+        }
+        if (acct) {
+          bru.setEnvVar("virtual_account_number", acct.accountNumber);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

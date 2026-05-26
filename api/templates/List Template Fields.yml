@@ -1,0 +1,19 @@
+info:
+  name: List Template Fields
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{api}}/api/templates/{{template_id}}/fields"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

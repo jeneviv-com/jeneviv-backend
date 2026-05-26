@@ -1,0 +1,17 @@
+info:
+  name: List Jobs
+  type: http
+  seq: 1
+
+# Public discovery — Railway operators read this to learn each
+# job's recommended cron expression (UTC).
+
+http:
+  method: GET
+  url: "{{api}}/api/jobs"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

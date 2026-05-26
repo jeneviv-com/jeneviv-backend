@@ -3,9 +3,9 @@ variables:
   - name: api
     value: http://localhost:3300
   - name: auth_email
-    value: test1@example.com
+    value: test2@example.com
   - name: auth_password
-    value: passwor
+    value: password
   - name: auth_name
     value: Test User
   - name: access_token
@@ -13,4 +13,6 @@ variables:
   - name: refresh_token
     value: ""
   - name: session_cookie
+    value: ""
+  - name: cron_secret
     value: ""

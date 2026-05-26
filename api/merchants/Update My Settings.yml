@@ -1,0 +1,27 @@
+info:
+  name: Update My Settings
+  type: http
+  seq: 3
+
+http:
+  method: PATCH
+  url: "{{api}}/api/merchants/me/settings"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "payout_mode": "manual",
+        "email_notification_for_transactions": true,
+        "email_notification_period": "immediate"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

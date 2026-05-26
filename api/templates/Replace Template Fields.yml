@@ -1,0 +1,48 @@
+info:
+  name: Replace Template Fields
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{api}}/api/templates/{{template_id}}/fields"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "fields": [
+          {
+            "position": 0,
+            "display_name": "Student Name",
+            "field_id": "student_name",
+            "type": "short_text",
+            "required": true
+          },
+          {
+            "position": 1,
+            "display_name": "Class",
+            "field_id": "class",
+            "type": "select",
+            "required": true,
+            "options": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          {
+            "position": 2,
+            "display_name": "Parent Phone",
+            "field_id": "parent_phone",
+            "type": "phone",
+            "required": true
+          }
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

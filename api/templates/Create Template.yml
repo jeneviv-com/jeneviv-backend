@@ -1,0 +1,33 @@
+info:
+  name: Create Template
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{api}}/api/templates"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "School Fees",
+        "description": "Standard tuition collection template"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const t = res.body && res.body.template;
+        if (t && t.id) bru.setEnvVar("template_id", t.id);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

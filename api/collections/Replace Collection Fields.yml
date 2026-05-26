@@ -1,0 +1,40 @@
+info:
+  name: Replace Collection Fields
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{api}}/api/collections/{{collection_id}}/fields"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "fields": [
+          {
+            "position": 0,
+            "display_name": "Matric Number",
+            "field_id": "matric_number",
+            "type": "short_text",
+            "required": true
+          },
+          {
+            "position": 1,
+            "display_name": "Department",
+            "field_id": "department",
+            "type": "short_text",
+            "required": true
+          }
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

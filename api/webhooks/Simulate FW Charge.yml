@@ -1,0 +1,40 @@
+info:
+  name: Simulate Flutterwave Charge Webhook
+  type: http
+  seq: 1
+
+# Static signature works only if you precompute base64(HMAC-SHA256(rawBody, FLUTTERWAVE_WEBHOOK_SECRET))
+# Prefer running `pnpm tsx scripts/simulate-fw-webhook.ts --reference {{transaction_reference}} --amount 150075`
+# which signs and posts in one step.
+
+http:
+  method: POST
+  url: "{{api}}/api/webhooks/flutterwave"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: flutterwave-signature
+      value: "REPLACE_WITH_HMAC_SHA256_BASE64"
+  body:
+    type: json
+    data: |-
+      {
+        "id": "wbk_test_001",
+        "type": "charge.completed",
+        "timestamp": 1735116884019,
+        "data": {
+          "id": "chg_test_001",
+          "reference": "{{transaction_reference}}",
+          "amount": 1500.75,
+          "currency": "NGN",
+          "status": "succeeded",
+          "created_datetime": "2026-05-26T12:00:00.000Z",
+          "processor_response": { "code": "00", "type": "approved" }
+        }
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,19 @@
+info:
+  name: Delete Template
+  type: http
+  seq: 7
+
+http:
+  method: DELETE
+  url: "{{api}}/api/templates/{{template_id}}"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

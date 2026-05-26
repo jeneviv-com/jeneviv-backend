@@ -1,0 +1,26 @@
+info:
+  name: Update Collection
+  type: http
+  seq: 4
+
+http:
+  method: PATCH
+  url: "{{api}}/api/collections/{{collection_id}}"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 300000,
+        "description": "Updated price for new term"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,23 @@
+info:
+  name: List Merchants
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{api}}/api/admin/merchants?status=pending"
+  params:
+    - name: status
+      value: pending
+      type: query
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

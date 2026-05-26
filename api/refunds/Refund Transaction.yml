@@ -1,0 +1,38 @@
+info:
+  name: Refund Transaction
+  type: http
+  seq: 1
+
+# Admin OR the owning merchant can call this.
+# Deducts tx.amount from merchant.payouts_balance and calls gateway.initiateRefund.
+
+http:
+  method: POST
+  url: "{{api}}/api/admin/transactions/{{transaction_id}}/refund"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "reason": "Customer requested cancellation"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const r = res.body && res.body.refund;
+        if (r) {
+          bru.setEnvVar("refund_id", r.id);
+          bru.setEnvVar("refund_gateway_ref", r.gatewayRef);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

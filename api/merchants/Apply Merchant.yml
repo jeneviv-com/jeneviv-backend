@@ -1,0 +1,26 @@
+info:
+  name: Apply Merchant
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{api}}/api/merchants/apply"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "display_name": "Acme School Fees",
+        "application_note": "We collect tuition for a primary school in Lagos."
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,25 @@
+info:
+  name: Approve Merchant
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{api}}/api/admin/merchants/{{merchant_id}}/approve"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "note": "KYC documents verified."
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
