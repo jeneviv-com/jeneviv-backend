@@ -3,6 +3,11 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireMerchant } from "../../middleware/require-merchant.js";
 import { validate } from "../../middleware/validate.js";
 import {
+  listCollectionTransactionsQuerySchema,
+  type ListCollectionTransactionsQuery,
+} from "../transactions/schemas.js";
+import { listCollectionTransactionsForMerchant } from "../transactions/service.js";
+import {
   collectionIdParamSchema,
   createCollectionSchema,
   replaceCollectionFieldsSchema,
@@ -96,6 +101,25 @@ collectionsRouter.delete(
       const { id } = req.params as { id: string };
       await deleteCollection(req.merchant!, id);
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+collectionsRouter.get(
+  "/:id/transactions",
+  validate(collectionIdParamSchema, "params"),
+  validate(listCollectionTransactionsQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params as { id: string };
+      const data = await listCollectionTransactionsForMerchant(
+        req.merchant!,
+        id,
+        req.query as unknown as ListCollectionTransactionsQuery,
+      );
+      res.json(data);
     } catch (err) {
       next(err);
     }

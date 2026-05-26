@@ -1,0 +1,34 @@
+info:
+  name: List Collection Transactions
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{api}}/api/collections/{{collection_id}}/transactions"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+
+params:
+  query:
+    - name: status
+      value: success
+      enabled: false
+    - name: settled
+      value: "false"
+      enabled: false
+    - name: limit
+      value: "50"
+      enabled: false
+    - name: offset
+      value: "0"
+      enabled: false
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

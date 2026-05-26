@@ -1,7 +1,8 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import type { User } from "../../db/schema/auth.js";
-import { merchants } from "../../db/schema/merchants.js";
+import { collections } from "../../db/schema/collections.js";
+import { merchants, type Merchant } from "../../db/schema/merchants.js";
 import {
   paymentAccounts,
   transactionFields,
@@ -11,6 +12,7 @@ import {
   type TransactionField,
 } from "../../db/schema/transactions.js";
 import { HttpError } from "../../middleware/error.js";
+import type { ListCollectionTransactionsQuery } from "./schemas.js";
 
 export interface TransactionView {
   transaction: Transaction;
@@ -55,4 +57,38 @@ export async function getTransactionFor(
   });
 
   return { transaction: tx, fields, payment_account: account ?? null };
+}
+
+export async function listCollectionTransactionsForMerchant(
+  merchant: Merchant,
+  collectionId: string,
+  query: ListCollectionTransactionsQuery,
+): Promise<{ transactions: Transaction[] }> {
+  const collection = await db.query.collections.findFirst({
+    where: and(
+      eq(collections.id, collectionId),
+      eq(collections.merchantId, merchant.id),
+    ),
+  });
+  if (!collection) {
+    throw new HttpError(404, "not_found", "Collection not found");
+  }
+
+  const filters = [
+    eq(transactions.collectionId, collectionId),
+    eq(transactions.merchantId, merchant.id),
+  ];
+  if (query.status) filters.push(eq(transactions.status, query.status));
+  if (query.settled === true) filters.push(isNotNull(transactions.settledAt));
+  if (query.settled === false) filters.push(isNull(transactions.settledAt));
+
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(and(...filters))
+    .orderBy(desc(transactions.createdAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return { transactions: rows };
 }
