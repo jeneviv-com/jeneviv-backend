@@ -71,6 +71,8 @@ export async function createCollection(
         currency: input.currency,
         coverImageUrl: input.cover_image_url ?? null,
         isActive: input.is_active ?? true,
+        reconciliationEnabled: input.reconciliation_enabled ?? false,
+        reconciliationLabel: input.reconciliation_label ?? null,
       })
       .returning();
 
@@ -165,6 +167,12 @@ export async function updateCollection(
     patch.coverImageUrl = input.cover_image_url;
   }
   if (input.is_active !== undefined) patch.isActive = input.is_active;
+  if (input.reconciliation_enabled !== undefined) {
+    patch.reconciliationEnabled = input.reconciliation_enabled;
+  }
+  if (input.reconciliation_label !== undefined) {
+    patch.reconciliationLabel = input.reconciliation_label;
+  }
 
   const [updated] = await db
     .update(collections)

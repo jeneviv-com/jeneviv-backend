@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   pgTable,
   text,
   timestamp,
@@ -41,6 +42,11 @@ export const transactions = pgTable(
     paymentAccountId: text("payment_account_id"),
     paidAt: timestamp("paid_at", { mode: "date", withTimezone: true }),
     settledAt: timestamp("settled_at", { mode: "date", withTimezone: true }),
+    reconciled: boolean("reconciled").notNull().default(false),
+    reconciledAt: timestamp("reconciled_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -8,6 +8,8 @@ export const createCollectionSchema = z.object({
   currency: z.string().trim().length(3).toUpperCase().default("NGN"),
   cover_image_url: z.string().url().optional(),
   is_active: z.boolean().optional(),
+  reconciliation_enabled: z.boolean().optional(),
+  reconciliation_label: z.string().trim().min(1).max(80).optional(),
   template_id: z.string().min(1).optional(),
 });
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;
@@ -20,6 +22,8 @@ export const updateCollectionSchema = z
     currency: z.string().trim().length(3).toUpperCase().optional(),
     cover_image_url: z.string().url().nullable().optional(),
     is_active: z.boolean().optional(),
+    reconciliation_enabled: z.boolean().optional(),
+    reconciliation_label: z.string().trim().min(1).max(80).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "At least one field required",

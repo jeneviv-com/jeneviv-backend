@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import type { User } from "../../db/schema/auth.js";
 import { collections } from "../../db/schema/collections.js";
@@ -91,4 +91,40 @@ export async function listCollectionTransactionsForMerchant(
     .offset(query.offset);
 
   return { transactions: rows };
+}
+
+export async function reconcileTransactionsForMerchant(
+  merchant: Merchant,
+  ids: string[],
+  reconciled: boolean,
+): Promise<{ transactions: Transaction[] }> {
+  const uniqueIds = Array.from(new Set(ids));
+
+  const updated = await db
+    .update(transactions)
+    .set({
+      reconciled,
+      reconciledAt: reconciled ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(transactions.id, uniqueIds),
+        eq(transactions.merchantId, merchant.id),
+      ),
+    )
+    .returning();
+
+  if (updated.length !== uniqueIds.length) {
+    const foundIds = new Set(updated.map((t) => t.id));
+    const missing = uniqueIds.filter((id) => !foundIds.has(id));
+    throw new HttpError(
+      404,
+      "not_found",
+      "One or more transactions not found",
+      { missing },
+    );
+  }
+
+  return { transactions: updated };
 }

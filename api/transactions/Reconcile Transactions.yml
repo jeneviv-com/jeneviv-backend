@@ -1,0 +1,26 @@
+info:
+  name: Reconcile Transactions
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: "{{api}}/api/transactions/reconcile"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "ids": ["{{transaction_id}}"],
+        "reconciled": true
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

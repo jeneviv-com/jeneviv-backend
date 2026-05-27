@@ -25,3 +25,11 @@ export const listCollectionTransactionsQuerySchema = z.object({
 export type ListCollectionTransactionsQuery = z.infer<
   typeof listCollectionTransactionsQuerySchema
 >;
+
+export const reconcileTransactionsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+  reconciled: z.boolean(),
+});
+export type ReconcileTransactionsInput = z.infer<
+  typeof reconcileTransactionsSchema
+>;

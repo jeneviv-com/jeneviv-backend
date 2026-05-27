@@ -28,6 +28,10 @@ export const collections = pgTable(
     currency: text("currency").notNull().default("NGN"),
     coverImageUrl: text("cover_image_url"),
     isActive: boolean("is_active").notNull().default(true),
+    reconciliationEnabled: boolean("reconciliation_enabled")
+      .notNull()
+      .default(false),
+    reconciliationLabel: text("reconciliation_label"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),
