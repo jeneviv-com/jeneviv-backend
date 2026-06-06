@@ -5,10 +5,10 @@ info:
 
 http:
   method: GET
-  url: "{{api}}/api/banks?country=NG"
+  url: "{{api}}/api/banks?country=ng"
   params:
     - name: country
-      value: NG
+      value: ng
       type: query
 
 settings:

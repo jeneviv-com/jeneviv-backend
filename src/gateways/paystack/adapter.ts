@@ -22,6 +22,17 @@ interface PsEnvelope<T> {
   data: T;
 }
 
+// Paystack's /bank endpoint expects a full country name, not the ISO alpha-2
+// code our API/DB layer uses. Map the canonical code to Paystack's form.
+const PS_COUNTRY_BY_ISO: Record<string, string> = {
+  NG: "nigeria",
+  GH: "ghana",
+  KE: "kenya",
+  ZA: "south africa",
+  CI: "côte d'ivoire",
+  EG: "egypt",
+};
+
 interface PsCustomer {
   id: number;
   customer_code: string;
@@ -197,7 +208,10 @@ export const paystackAdapter: PaymentGateway = {
     const res = await psRequest<PsEnvelope<PsBank[]>>({
       method: "GET",
       path: "/bank",
-      query: { country: country || "nigeria", perPage: 1000 },
+      query: {
+        country: PS_COUNTRY_BY_ISO[country?.toUpperCase()] ?? "nigeria",
+        perPage: 1000,
+      },
     });
     const banks = res.data?.data;
     if (!Array.isArray(banks)) {

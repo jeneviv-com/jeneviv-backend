@@ -18,6 +18,11 @@ http:
         "note": "KYC documents verified."
       }
 
+runtime:
+  variables:
+    - name: merchant_id
+      value: CZZCQ9APHs2n7c9xdqSa5
+
 settings:
   encodeUrl: true
   timeout: 0
