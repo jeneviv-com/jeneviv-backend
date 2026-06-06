@@ -74,7 +74,28 @@ async function creditPayoutsBalance(
     .where(eq(merchants.id, merchantId));
 }
 
+/**
+ * Gateways that settle straight to a merchant subaccount (Paystack) leave us
+ * with no wallet/payouts balance to disburse, so merchant-initiated payouts and
+ * payout crons are disabled while such a gateway is active.
+ */
+export function directSettlementActive(): boolean {
+  return getDefaultGateway().ensureSubaccount !== undefined;
+}
+
+export function assertPayoutsEnabled(): void {
+  if (directSettlementActive()) {
+    throw new HttpError(
+      400,
+      "payouts_unavailable",
+      "Payouts are not available: funds settle directly to merchant bank accounts via the active gateway",
+    );
+  }
+}
+
 export async function initiatePayout(args: InitiatePayoutArgs): Promise<Payout> {
+  assertPayoutsEnabled();
+
   if (args.currency !== "NGN") {
     throw new HttpError(
       422,

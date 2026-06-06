@@ -263,11 +263,26 @@ export async function initPayment(
   }
 
   const gateway = getDefaultGateway();
-  const customerId = await ensureGatewayCustomerForMerchant(
-    merchant,
-    merchantUser.email,
-    merchantUser.name,
-  );
+
+  let subaccountCode: string | undefined;
+  if (gateway.ensureSubaccount) {
+    subaccountCode = merchant.gatewaySubaccountIds?.[gateway.name];
+    if (!subaccountCode) {
+      throw new HttpError(
+        403,
+        "merchant_not_onboarded",
+        "Merchant has not completed payout setup",
+      );
+    }
+  }
+
+  const customerId = gateway.usesCustomerForVirtualAccount
+    ? await ensureGatewayCustomerForMerchant(
+        merchant,
+        merchantUser.email,
+        merchantUser.name,
+      )
+    : "";
 
   const reference = newReference();
   const narration = `${merchant.displayName ?? "Jeneviv"} - ${collectionForResult.name}`.slice(
@@ -280,10 +295,14 @@ export async function initPayment(
     virtualAccount = await gateway.createVirtualAccount({
       reference,
       customerId,
+      customerEmail: user.email,
+      customerName: user.name,
       amount: breakdown.total,
       currency: collectionForResult.currency,
       narration,
-      expirySeconds: env.FLUTTERWAVE_VIRTUAL_ACCOUNT_EXPIRY_SECONDS,
+      expirySeconds: env.VIRTUAL_ACCOUNT_EXPIRY_SECONDS,
+      subaccountCode,
+      platformFeeMinor: breakdown.platformFee,
     });
   } catch (err) {
     if (err instanceof GatewayError) {
@@ -295,6 +314,14 @@ export async function initPayment(
     }
     throw err;
   }
+
+  // Split gateways (Paystack) gross up the customer charge to cover their fee,
+  // so the real gateway fee is only known once the account is created.
+  const totalCharged = virtualAccount.totalCharged;
+  const gatewayFee = Math.max(
+    0,
+    totalCharged - (breakdown.amount + breakdown.platformFee),
+  );
 
   const txId = newId();
   const accountId = newId();
@@ -312,8 +339,8 @@ export async function initPayment(
         status: "pending",
         amount: breakdown.amount,
         platformFee: breakdown.platformFee,
-        gatewayFee: breakdown.gatewayFee,
-        totalCharged: breakdown.total,
+        gatewayFee,
+        totalCharged,
         currency: collectionForResult.currency,
         gateway: gateway.name,
         paymentAccountId: accountId,
@@ -384,8 +411,8 @@ export async function initPayment(
       breakdown: {
         amount: breakdown.amount,
         platform_fee: breakdown.platformFee,
-        gateway_fee: breakdown.gatewayFee,
-        total_charged: breakdown.total,
+        gateway_fee: gatewayFee,
+        total_charged: totalCharged,
         currency: collectionForResult.currency,
       },
     };

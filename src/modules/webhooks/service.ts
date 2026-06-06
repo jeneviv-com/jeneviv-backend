@@ -7,8 +7,12 @@ import {
   getWebhookEventId,
   getWebhookEventType,
 } from "../../gateways/flutterwave/webhook.js";
+import {
+  getPaystackEventId,
+  getPaystackEventType,
+} from "../../gateways/paystack/webhook.js";
 import { getGateway } from "../../gateways/registry.js";
-import type { NormalizedEvent } from "../../gateways/types.js";
+import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
 import { newId } from "../../lib/short-code.js";
 import {
@@ -25,11 +29,18 @@ export interface IngestResult {
   message?: string;
 }
 
-export async function ingestFlutterwaveWebhook(
+interface EventIdentity {
+  getEventId(payload: unknown): string | null;
+  getEventType(payload: unknown): string | null;
+}
+
+async function ingestWebhook(
+  gatewayName: GatewayName,
+  identity: EventIdentity,
   rawBody: Buffer,
   headers: Record<string, string | string[] | undefined>,
 ): Promise<{ result: IngestResult; httpStatus: number }> {
-  const gateway = getGateway("flutterwave");
+  const gateway = getGateway(gatewayName);
 
   const verified = gateway.verifyWebhookSignature(rawBody, headers);
   if (!verified) {
@@ -49,8 +60,8 @@ export async function ingestFlutterwaveWebhook(
     };
   }
 
-  const eventId = getWebhookEventId(payload);
-  const eventType = getWebhookEventType(payload) ?? "unknown";
+  const eventId = identity.getEventId(payload);
+  const eventType = identity.getEventType(payload) ?? "unknown";
   if (!eventId) {
     return {
       result: { status: "invalid", message: "Missing event id" },
@@ -60,7 +71,7 @@ export async function ingestFlutterwaveWebhook(
 
   const existing = await db.query.webhookEvents.findFirst({
     where: (e, { and: andf, eq: eqf }) =>
-      andf(eqf(e.gateway, "flutterwave"), eqf(e.eventId, eventId)),
+      andf(eqf(e.gateway, gatewayName), eqf(e.eventId, eventId)),
   });
 
   if (existing) {
@@ -73,7 +84,7 @@ export async function ingestFlutterwaveWebhook(
   const eventRowId = newId();
   await db.insert(webhookEvents).values({
     id: eventRowId,
-    gateway: "flutterwave",
+    gateway: gatewayName,
     eventId,
     eventType,
     signatureVerified: true,
@@ -112,6 +123,30 @@ export async function ingestFlutterwaveWebhook(
   }
 }
 
+export async function ingestFlutterwaveWebhook(
+  rawBody: Buffer,
+  headers: Record<string, string | string[] | undefined>,
+): Promise<{ result: IngestResult; httpStatus: number }> {
+  return ingestWebhook(
+    "flutterwave",
+    { getEventId: getWebhookEventId, getEventType: getWebhookEventType },
+    rawBody,
+    headers,
+  );
+}
+
+export async function ingestPaystackWebhook(
+  rawBody: Buffer,
+  headers: Record<string, string | string[] | undefined>,
+): Promise<{ result: IngestResult; httpStatus: number }> {
+  return ingestWebhook(
+    "paystack",
+    { getEventId: getPaystackEventId, getEventType: getPaystackEventType },
+    rawBody,
+    headers,
+  );
+}
+
 async function processNormalizedEvent(event: NormalizedEvent): Promise<void> {
   switch (event.type) {
     case "charge.success":
@@ -144,6 +179,11 @@ async function handleChargeSuccess(
   if (!tx) return;
   if (tx.status === "success") return;
 
+  // Flutterwave funds land in our balance and must be promoted to the merchant.
+  // Split gateways (Paystack) settle straight to the merchant subaccount, so we
+  // only record the transaction and never touch a wallet balance.
+  const holdsFunds = tx.gateway === "flutterwave";
+
   await db.transaction(async (trx) => {
     const updateRes = await trx
       .update(transactions)
@@ -151,21 +191,27 @@ async function handleChargeSuccess(
         status: "success",
         paidAt: event.paidAt,
         gatewayId: event.gatewayId,
-        gatewayFee: event.gatewayFee,
-        totalCharged: tx.totalCharged - tx.gatewayFee + event.gatewayFee,
         updatedAt: new Date(),
+        ...(holdsFunds
+          ? {
+              gatewayFee: event.gatewayFee,
+              totalCharged: tx.totalCharged - tx.gatewayFee + event.gatewayFee,
+            }
+          : { settledAt: event.paidAt }),
       })
       .where(eq(transactions.id, tx.id))
       .returning({ id: transactions.id });
     if (updateRes.length === 0) return;
 
-    await trx
-      .update(merchants)
-      .set({
-        walletBalanceNgn: sql`${merchants.walletBalanceNgn} + ${tx.amount}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(merchants.id, tx.merchantId));
+    if (holdsFunds) {
+      await trx
+        .update(merchants)
+        .set({
+          walletBalanceNgn: sql`${merchants.walletBalanceNgn} + ${tx.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(merchants.id, tx.merchantId));
+    }
   });
 
   await recordAudit({
@@ -175,10 +221,12 @@ async function handleChargeSuccess(
     entityId: tx.id,
     metadata: {
       reference: event.reference,
+      gateway: tx.gateway,
       gateway_id: event.gatewayId,
       amount: tx.amount,
       gateway_fee: event.gatewayFee,
       currency: tx.currency,
+      settled_direct: !holdsFunds,
     },
   });
 }

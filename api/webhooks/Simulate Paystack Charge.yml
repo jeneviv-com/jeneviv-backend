@@ -1,0 +1,39 @@
+info:
+  name: Simulate Paystack Charge Webhook
+  type: http
+  seq: 2
+
+# Static signature works only if you precompute hex(HMAC-SHA512(rawBody, PAYSTACK_SECRET_KEY)).
+# Prefer running `pnpm tsx scripts/simulate-ps-webhook.ts --reference {{transaction_reference}} --amount 525767`
+# which signs and posts in one step. Amounts are in kobo (minor units).
+
+http:
+  method: POST
+  url: "{{api}}/api/webhooks/paystack"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: x-paystack-signature
+      value: "REPLACE_WITH_HMAC_SHA512_HEX"
+  body:
+    type: json
+    data: |-
+      {
+        "event": "charge.success",
+        "data": {
+          "id": 302961,
+          "reference": "{{transaction_reference}}",
+          "amount": 525767,
+          "fees": 18267,
+          "currency": "NGN",
+          "status": "success",
+          "paid_at": "2026-06-05T12:00:00.000Z",
+          "gateway_response": "Approved"
+        }
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

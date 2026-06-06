@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import {
   merchantBankAccounts,
@@ -16,6 +16,55 @@ import type {
   CreateBankAccountInput,
   UpdateMerchantSettingsInput,
 } from "./schemas.js";
+
+/**
+ * Create (or refresh) the gateway split destination for a merchant's bank
+ * account and cache its code on the merchant. Split gateways (Paystack) settle
+ * collections straight to this subaccount, so we never hold merchant funds.
+ * No-op for gateways that don't support subaccounts (Flutterwave).
+ */
+async function ensureMerchantSubaccount(
+  merchant: Merchant,
+  bank: Pick<MerchantBankAccount, "bankCode" | "accountNumber" | "accountName">,
+  force = false,
+): Promise<void> {
+  const gateway = getDefaultGateway();
+  if (!gateway.ensureSubaccount) return;
+  if (!force && merchant.gatewaySubaccountIds?.[gateway.name]) return;
+
+  try {
+    const { subaccountCode } = await gateway.ensureSubaccount({
+      businessName: merchant.displayName ?? bank.accountName,
+      bankCode: bank.bankCode,
+      accountNumber: bank.accountNumber,
+      percentageCharge: 0,
+    });
+    await db
+      .update(merchants)
+      .set({
+        gatewaySubaccountIds: sql`jsonb_set(${merchants.gatewaySubaccountIds}, ${`{${gateway.name}}`}, ${`"${subaccountCode}"`}::jsonb, true)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(merchants.id, merchant.id));
+
+    await recordAudit({
+      actorUid: merchant.userId,
+      action: "merchant.subaccount.create",
+      entityType: "merchant",
+      entityId: merchant.id,
+      metadata: { gateway: gateway.name, subaccount_code: subaccountCode },
+    });
+  } catch (err) {
+    if (err instanceof GatewayError) {
+      throw new HttpError(
+        502,
+        "gateway_error",
+        `Failed to create payout subaccount: ${err.message}`,
+      );
+    }
+    throw err;
+  }
+}
 
 export async function findMerchantByUser(
   userId: string,
@@ -84,6 +133,7 @@ export async function updateMerchantSettings(
   input: UpdateMerchantSettingsInput,
 ): Promise<Merchant> {
   const patch: Partial<typeof merchants.$inferInsert> = {};
+  let bankToRepoint: MerchantBankAccount | undefined;
   if (input.display_name !== undefined) patch.displayName = input.display_name;
   if (input.payout_mode !== undefined) patch.payoutMode = input.payout_mode;
   if (input.email_notification_for_transactions !== undefined) {
@@ -112,6 +162,7 @@ export async function updateMerchantSettings(
         );
       }
       patch.defaultBankAccountId = bank.id;
+      bankToRepoint = bank;
     }
   }
 
@@ -125,6 +176,14 @@ export async function updateMerchantSettings(
 
   if (!updated) {
     throw new HttpError(500, "internal_error", "Failed to update merchant");
+  }
+
+  if (bankToRepoint) {
+    await ensureMerchantSubaccount(updated, bankToRepoint, true);
+    const refreshed = await db.query.merchants.findFirst({
+      where: eq(merchants.id, merchant.id),
+    });
+    if (refreshed) return refreshed;
   }
   return updated;
 }
@@ -200,6 +259,10 @@ export async function createMerchantBankAccount(
 
   if (!created) {
     throw new HttpError(500, "internal_error", "Failed to add bank account");
+  }
+
+  if (shouldBeDefault) {
+    await ensureMerchantSubaccount(merchant, created, true);
   }
 
   await recordAudit({

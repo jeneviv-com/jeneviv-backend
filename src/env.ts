@@ -56,6 +56,13 @@ export const env = {
     1200,
   ),
 
+  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY ?? "",
+  PAYSTACK_BASE_URL: optional("PAYSTACK_BASE_URL", "https://api.paystack.co"),
+  VIRTUAL_ACCOUNT_EXPIRY_SECONDS: optionalInt(
+    "VIRTUAL_ACCOUNT_EXPIRY_SECONDS",
+    1200,
+  ),
+
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
   CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ?? "",
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ?? "",

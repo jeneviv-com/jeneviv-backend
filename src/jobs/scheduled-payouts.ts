@@ -3,7 +3,7 @@ import { db } from "../db/index.js";
 import { merchants, type Merchant } from "../db/schema/merchants.js";
 import { env } from "../env.js";
 import { toMinor } from "../lib/money.js";
-import { initiatePayout } from "../modules/payouts/service.js";
+import { initiatePayout, directSettlementActive } from "../modules/payouts/service.js";
 
 export interface ScheduledPayoutsResult {
   mode: "auto_daily" | "auto_weekly";
@@ -33,6 +33,11 @@ async function listEligibleMerchants(
 export async function runScheduledPayouts(
   mode: "auto_daily" | "auto_weekly",
 ): Promise<ScheduledPayoutsResult> {
+  // Direct-settlement gateways (Paystack) disburse to merchants automatically.
+  if (directSettlementActive()) {
+    return { mode, eligible: 0, initiated: 0, errors: 0 };
+  }
+
   const eligible = await listEligibleMerchants(mode);
 
   let initiated = 0;

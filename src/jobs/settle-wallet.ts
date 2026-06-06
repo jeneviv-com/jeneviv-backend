@@ -3,6 +3,7 @@ import { db } from "../db/index.js";
 import { merchants } from "../db/schema/merchants.js";
 import { transactions } from "../db/schema/transactions.js";
 import { recordAudit } from "../lib/audit.js";
+import { directSettlementActive } from "../modules/payouts/service.js";
 
 export interface SettleWalletResult {
   settled: number;
@@ -10,6 +11,9 @@ export interface SettleWalletResult {
 }
 
 export async function runSettleWallet(): Promise<SettleWalletResult> {
+  // Direct-settlement gateways (Paystack) never credit a wallet balance.
+  if (directSettlementActive()) return { settled: 0, total_amount_ngn: 0 };
+
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const eligible = await db

@@ -1,0 +1,1 @@
+ALTER TABLE "merchants" ADD COLUMN "gateway_subaccount_ids" jsonb DEFAULT '{}'::jsonb NOT NULL;

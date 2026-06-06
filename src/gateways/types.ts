@@ -13,6 +13,13 @@ export interface CreateVirtualAccountArgs {
   currency: string;
   narration: string;
   expirySeconds: number;
+  /** Payer email — required by gateways that charge by email (Paystack). */
+  customerEmail?: string;
+  customerName?: string;
+  /** Merchant split destination (Paystack subaccount code). */
+  subaccountCode?: string;
+  /** Flat platform charge taken from the split, in minor units. */
+  platformFeeMinor?: number;
 }
 
 export interface CreateVirtualAccountResult {
@@ -22,6 +29,19 @@ export interface CreateVirtualAccountResult {
   bankCode: string;
   bankName: string;
   expiryAt: Date;
+  /**
+   * Actual amount the customer must pay, in minor units. For split gateways
+   * (Paystack) this is grossed up above `amount` to cover the gateway fee.
+   */
+  totalCharged: number;
+}
+
+export interface EnsureSubaccountArgs {
+  businessName: string;
+  bankCode: string;
+  accountNumber: string;
+  /** Percentage the platform takes per transaction; 0 when using flat splits. */
+  percentageCharge?: number;
 }
 
 export interface ResolveAccountNameArgs {
@@ -110,11 +130,22 @@ export type NormalizedEvent =
 export interface PaymentGateway {
   readonly name: GatewayName;
 
+  /**
+   * Whether a gateway customer must be created before a virtual account
+   * (Flutterwave). Paystack charges by payer email, so this is false there.
+   */
+  readonly usesCustomerForVirtualAccount: boolean;
+
   ensureCustomer(args: EnsureCustomerArgs): Promise<{ customerId: string }>;
 
   createVirtualAccount(
     args: CreateVirtualAccountArgs,
   ): Promise<CreateVirtualAccountResult>;
+
+  /** Create a merchant split destination. Only split gateways implement this. */
+  ensureSubaccount?(
+    args: EnsureSubaccountArgs,
+  ): Promise<{ subaccountCode: string }>;
 
   resolveAccountName(
     args: ResolveAccountNameArgs,

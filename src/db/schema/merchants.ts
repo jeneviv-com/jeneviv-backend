@@ -59,6 +59,10 @@ export const merchants = pgTable(
       .$type<Record<string, string>>()
       .notNull()
       .default({}),
+    gatewaySubaccountIds: jsonb("gateway_subaccount_ids")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),

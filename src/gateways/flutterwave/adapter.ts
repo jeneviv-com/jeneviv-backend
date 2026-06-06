@@ -99,6 +99,7 @@ const REFUND_STATUS_MAP: Record<string, InitiateRefundResult["status"]> = {
 
 export const flutterwaveAdapter: PaymentGateway = {
   name: "flutterwave",
+  usesCustomerForVirtualAccount: true,
 
   async ensureCustomer({
     email,
@@ -152,6 +153,7 @@ export const flutterwaveAdapter: PaymentGateway = {
       bankCode: env.FLUTTERWAVE_VIRTUAL_ACCOUNT_BANK_CODE,
       bankName: va.account_bank_name ?? "Indulge MFB",
       expiryAt,
+      totalCharged: args.amount,
     };
   },
 

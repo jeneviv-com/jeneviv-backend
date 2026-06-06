@@ -1,10 +1,11 @@
 import { env } from "../env.js";
 import { flutterwaveAdapter } from "./flutterwave/adapter.js";
+import { paystackAdapter } from "./paystack/adapter.js";
 import type { GatewayName, PaymentGateway } from "./types.js";
 
 const adapters: Record<GatewayName, PaymentGateway | undefined> = {
   flutterwave: flutterwaveAdapter,
-  paystack: undefined,
+  paystack: paystackAdapter,
   monnify: undefined,
 };
 
