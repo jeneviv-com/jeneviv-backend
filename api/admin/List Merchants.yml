@@ -6,18 +6,87 @@ info:
 http:
   method: GET
   url: "{{api}}/api/admin/merchants?status=pending"
-  params:
-    - name: status
-      value: pending
-      type: query
   headers:
     - name: Cookie
       value: "{{session_cookie}}"
     - name: Origin
       value: "{{api}}"
+  params:
+    - name: status
+      value: pending
+      type: query
 
 settings:
   encodeUrl: true
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/admin/merchants?status=pending"
+      method: GET
+      headers:
+        - name: Cookie
+          value: "{{session_cookie}}"
+        - name: Origin
+          value: "{{api}}"
+      params:
+        - name: status
+          value: pending
+          type: query
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: content-type
+          value: application/json; charset=utf-8
+        - name: date
+          value: Sat, 06 Jun 2026 17:46:31 GMT
+        - name: etag
+          value: W/"255-L2Z0RCUN71nBG0Am4gzOH0oASrc"
+        - name: server
+          value: railway-hikari
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: wSYKhBshRESZ-fy6YqdHTg
+        - name: x-hikari-trace
+          value: lhr1.4rsz
+        - name: vary
+          value: accept-encoding
+        - name: transfer-encoding
+          value: chunked
+        - name: connection
+          value: keep-alive
+      body:
+        type: json
+        data: |-
+          {
+            "merchants": [
+              {
+                "id": "tY5PibdJ3ZGqFcG22jzqs",
+                "userId": "RMwcXskBdCqu2XBaep4Cr0O68ZLHu9A6",
+                "merchantCode": "eCxNpTSq",
+                "displayName": "Acme School Fees",
+                "status": "pending",
+                "walletBalanceNgn": 0,
+                "payoutsBalanceNgn": 0,
+                "payoutMode": "manual",
+                "defaultBankAccountId": null,
+                "emailNotificationForTransactions": true,
+                "emailNotificationPeriod": "immediate",
+                "applicationNote": "We collect tuition for a primary school in Uyo.",
+                "adminReviewNote": null,
+                "reviewedByUid": null,
+                "reviewedAt": null,
+                "gatewayCustomerIds": {},
+                "gatewaySubaccountIds": {},
+                "createdAt": "2026-06-06T17:45:37.872Z",
+                "updatedAt": "2026-06-06T17:45:37.872Z"
+              }
+            ]
+          }

@@ -173,3 +173,59 @@ examples:
             "message": "Password too short",
             "code": "PASSWORD_TOO_SHORT"
           }
+  - name: Success
+    request:
+      url: "{{api}}/api/auth/sign-up/email"
+      method: POST
+      headers:
+        - name: Origin
+          value: "{{api}}"
+      body:
+        type: json
+        data: |-
+          {
+            "name": "{{auth_name}}",
+            "email": "{{auth_email}}",
+            "password": "{{auth_password}}"
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: content-type
+          value: application/json
+        - name: date
+          value: Sat, 06 Jun 2026 17:11:22 GMT
+        - name: server
+          value: railway-hikari
+        - name: set-cookie
+          value: __Secure-better-auth.session_token=gP2aoxhB12QFCmgNHrwUqx4HAuW3GfDL.BUAKRRqG5%2BBkoabCqNRIRiODUNh0HP6rLKUfeOQucAM%3D; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Lax
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: 8CBImeGIQ1K5bIAanbOCzg
+        - name: transfer-encoding
+          value: chunked
+        - name: x-hikari-trace
+          value: bcn1.h9g5
+        - name: vary
+          value: accept-encoding
+        - name: connection
+          value: keep-alive
+      body:
+        type: json
+        data: |-
+          {
+            "token": "gP2aoxhB12QFCmgNHrwUqx4HAuW3GfDL",
+            "user": {
+              "name": "Emmanuel Akpan",
+              "email": "emmanuelekopimo@gmail.com",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2026-06-06T17:11:21.970Z",
+              "updatedAt": "2026-06-06T17:11:21.970Z",
+              "id": "AHmyJF7E2h23CVYxrnXNyqbV096YpneX"
+            }
+          }

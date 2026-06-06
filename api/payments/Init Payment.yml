@@ -18,8 +18,9 @@ http:
         "collection_short_code": "{{collection_short_code}}",
         "field_values": {
           "student_name": "Jane Customer",
-          "class": "JSS1",
-          "parent_phone": "+2348000000000"
+          "matric_number": "22/SC/CO/1174",
+          "department": "Computer Science"
+          
         }
       }
 

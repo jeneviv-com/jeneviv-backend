@@ -8,7 +8,10 @@ import {
   type Collection,
   type CollectionField,
 } from "../../db/schema/collections.js";
-import type { Merchant } from "../../db/schema/merchants.js";
+import {
+  merchantBankAccounts,
+  type Merchant,
+} from "../../db/schema/merchants.js";
 import { newId, newShortCode } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import type { FieldInput } from "../templates/schemas.js";
@@ -47,10 +50,32 @@ async function ensureTemplateUsable(
   }
 }
 
+async function ensurePayoutSetupComplete(merchant: Merchant): Promise<void> {
+  // Collections must have a payout destination before they can take money —
+  // for split gateways (Paystack) this bank account is what the settlement
+  // subaccount is built from, so without it funds have nowhere to land.
+  if (merchant.defaultBankAccountId) {
+    const bank = await db.query.merchantBankAccounts.findFirst({
+      where: and(
+        eq(merchantBankAccounts.id, merchant.defaultBankAccountId),
+        eq(merchantBankAccounts.merchantId, merchant.id),
+      ),
+    });
+    if (bank?.verifiedAt) return;
+  }
+  throw new HttpError(
+    422,
+    "payout_setup_required",
+    "Add a verified bank account before creating a collection",
+  );
+}
+
 export async function createCollection(
   merchant: Merchant,
   input: CreateCollectionInput,
 ): Promise<{ collection: Collection; fields: CollectionField[] }> {
+  await ensurePayoutSetupComplete(merchant);
+
   if (input.template_id) {
     await ensureTemplateUsable(input.template_id, merchant);
   }

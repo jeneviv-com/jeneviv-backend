@@ -3,7 +3,7 @@ variables:
   - name: api
     value: https://jeneviv.up.railway.app
   - name: auth_email
-    value: emmanuelekopimo@gmail.com
+    value: emma.ekopimo@gmail.com
   - name: auth_password
     value: password
   - name: auth_name
@@ -16,3 +16,5 @@ variables:
     value: ""
   - name: cron_secret
     value: ""
+  - name: bank_account_id
+    value: cDN3QDc0JiNgFXwV0WskZ

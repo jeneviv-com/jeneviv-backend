@@ -24,3 +24,67 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/collections/{{collection_id}}"
+      method: PATCH
+      headers:
+        - name: Cookie
+          value: "{{session_cookie}}"
+        - name: Origin
+          value: "{{api}}"
+      body:
+        type: json
+        data: |-
+          {
+            "amount": 300000,
+            "description": "Updated price for new term"
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: content-type
+          value: application/json; charset=utf-8
+        - name: date
+          value: Sat, 06 Jun 2026 17:52:48 GMT
+        - name: etag
+          value: W/"178-1eq/8j1xB8q5YEDEQ7PPx9m03cw"
+        - name: server
+          value: railway-hikari
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: 8687avemT8mqRw5em3z_FQ
+        - name: x-hikari-trace
+          value: lhr1.1t7d
+        - name: vary
+          value: accept-encoding
+        - name: transfer-encoding
+          value: chunked
+        - name: connection
+          value: keep-alive
+      body:
+        type: json
+        data: |-
+          {
+            "collection": {
+              "id": "iJM1YSVhqMDcmrYf5FtWs",
+              "merchantId": "tY5PibdJ3ZGqFcG22jzqs",
+              "shortCode": "G6fEyk05",
+              "name": "CSC318 Manual",
+              "description": "Updated price for new term",
+              "amount": 300000,
+              "currency": "NGN",
+              "coverImageUrl": null,
+              "isActive": true,
+              "reconciliationEnabled": false,
+              "reconciliationLabel": null,
+              "createdAt": "2026-06-06T17:51:27.172Z",
+              "updatedAt": "2026-06-06T17:52:48.025Z"
+            }
+          }

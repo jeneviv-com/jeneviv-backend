@@ -15,16 +15,85 @@ http:
     type: json
     data: |-
       {
-        "note": "KYC documents verified."
+        "note": "KYC documents verified by us."
       }
 
 runtime:
   variables:
     - name: merchant_id
-      value: CZZCQ9APHs2n7c9xdqSa5
+      value: tY5PibdJ3ZGqFcG22jzqs
 
 settings:
   encodeUrl: true
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/admin/merchants/{{merchant_id}}/approve"
+      method: POST
+      headers:
+        - name: Cookie
+          value: "{{session_cookie}}"
+        - name: Origin
+          value: "{{api}}"
+      body:
+        type: json
+        data: |-
+          {
+            "note": "KYC documents verified by us."
+          }
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: content-type
+          value: application/json; charset=utf-8
+        - name: date
+          value: Sat, 06 Jun 2026 17:48:09 GMT
+        - name: etag
+          value: W/"2a2-NTYXLv0IBZNlxTNOXjiz9WYLuXA"
+        - name: server
+          value: railway-hikari
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: wvFG-5EGTGmfGOhArJsmnA
+        - name: x-hikari-trace
+          value: lhr1.4rsz
+        - name: vary
+          value: accept-encoding
+        - name: transfer-encoding
+          value: chunked
+        - name: connection
+          value: keep-alive
+      body:
+        type: json
+        data: |-
+          {
+            "merchant": {
+              "id": "tY5PibdJ3ZGqFcG22jzqs",
+              "userId": "RMwcXskBdCqu2XBaep4Cr0O68ZLHu9A6",
+              "merchantCode": "eCxNpTSq",
+              "displayName": "Acme School Fees",
+              "status": "approved",
+              "walletBalanceNgn": 0,
+              "payoutsBalanceNgn": 0,
+              "payoutMode": "manual",
+              "defaultBankAccountId": null,
+              "emailNotificationForTransactions": true,
+              "emailNotificationPeriod": "immediate",
+              "applicationNote": "We collect tuition for a primary school in Uyo.",
+              "adminReviewNote": "KYC documents verified by us.",
+              "reviewedByUid": "RMwcXskBdCqu2XBaep4Cr0O68ZLHu9A6",
+              "reviewedAt": "2026-06-06T17:48:09.898Z",
+              "gatewayCustomerIds": {},
+              "gatewaySubaccountIds": {},
+              "createdAt": "2026-06-06T17:45:37.872Z",
+              "updatedAt": "2026-06-06T17:48:09.898Z"
+            }
+          }
