@@ -17,3 +17,35 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/merchants/me/bank-accounts/{{bank_account_id}}"
+      method: DELETE
+      headers:
+        - name: Cookie
+          value: "{{session_cookie}}"
+        - name: Origin
+          value: "{{api}}"
+    response:
+      status: 204
+      statusText: No Content
+      headers:
+        - name: date
+          value: Sat, 06 Jun 2026 19:21:38 GMT
+        - name: server
+          value: railway-hikari
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: ivagpV2lRcaRSWsGWVMv1w
+        - name: x-hikari-trace
+          value: lhr1.4rsz
+        - name: connection
+          value: keep-alive
+      body:
+        type: text
+        data: ""

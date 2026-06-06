@@ -17,3 +17,58 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+examples:
+  - name: Success
+    request:
+      url: "{{api}}/api/merchants/me/bank-accounts"
+      method: GET
+      headers:
+        - name: Cookie
+          value: "{{session_cookie}}"
+        - name: Origin
+          value: "{{api}}"
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: content-type
+          value: application/json; charset=utf-8
+        - name: date
+          value: Sat, 06 Jun 2026 19:21:19 GMT
+        - name: etag
+          value: W/"120-b6QeF75nfh6hNns7NiY0/m0V3jI"
+        - name: server
+          value: railway-hikari
+        - name: x-powered-by
+          value: Express
+        - name: x-railway-edge
+          value: railway/europe-west4-drams3a
+        - name: x-railway-request-id
+          value: 9fU1blnVTSy72v5w21mRUA
+        - name: x-hikari-trace
+          value: lhr1.4rsz
+        - name: vary
+          value: accept-encoding
+        - name: transfer-encoding
+          value: chunked
+        - name: connection
+          value: keep-alive
+      body:
+        type: json
+        data: |-
+          {
+            "bank_accounts": [
+              {
+                "id": "s8b3KQq1jzw8xFrqNWvPf",
+                "merchantId": "tY5PibdJ3ZGqFcG22jzqs",
+                "accountNumber": "8165620409",
+                "accountName": "EMMANUEL EKOPIMO AKPAN",
+                "bankCode": "999992",
+                "currency": "NGN",
+                "isDefault": true,
+                "verifiedAt": "2026-06-06T19:20:42.739Z",
+                "createdAt": "2026-06-06T19:20:42.724Z"
+              }
+            ]
+          }

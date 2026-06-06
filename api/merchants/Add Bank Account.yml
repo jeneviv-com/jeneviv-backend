@@ -60,9 +60,9 @@ examples:
         - name: content-type
           value: application/json; charset=utf-8
         - name: date
-          value: Sat, 06 Jun 2026 17:39:19 GMT
+          value: Sat, 06 Jun 2026 19:20:42 GMT
         - name: etag
-          value: W/"11d-qqhpE3mdqikY8Ym+PC7XeLB2Itw"
+          value: W/"11d-sqHBa7RqirieujHg6KU/sgvXUtk"
         - name: server
           value: railway-hikari
         - name: x-powered-by
@@ -70,7 +70,7 @@ examples:
         - name: x-railway-edge
           value: railway/europe-west4-drams3a
         - name: x-railway-request-id
-          value: akLpM11pS1KCJTlL63j4Ww
+          value: ZQj0SjsVROSxdDtlm3z_FQ
         - name: x-hikari-trace
           value: lhr1.1t7d
         - name: vary
@@ -84,14 +84,14 @@ examples:
         data: |-
           {
             "bank_account": {
-              "id": "cDN3QDc0JiNgFXwV0WskZ",
-              "merchantId": "CZZCQ9APHs2n7c9xdqSa5",
+              "id": "s8b3KQq1jzw8xFrqNWvPf",
+              "merchantId": "tY5PibdJ3ZGqFcG22jzqs",
               "accountNumber": "8165620409",
               "accountName": "EMMANUEL EKOPIMO AKPAN",
               "bankCode": "999992",
               "currency": "NGN",
               "isDefault": true,
-              "verifiedAt": "2026-06-06T17:39:19.096Z",
-              "createdAt": "2026-06-06T17:39:19.079Z"
+              "verifiedAt": "2026-06-06T19:20:42.739Z",
+              "createdAt": "2026-06-06T19:20:42.724Z"
             }
           }
