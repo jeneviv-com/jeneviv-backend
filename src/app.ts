@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
+import { cors } from "./middleware/cors.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { webhookRawBody } from "./middleware/raw-body.js";
 import { adminRouter } from "./modules/admin/routes.js";
@@ -26,6 +27,8 @@ const app = express();
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(currentDir, "../public");
+
+app.use(cors);
 
 if (existsSync(publicDir)) {
   app.use(express.static(publicDir));

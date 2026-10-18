@@ -25,13 +25,38 @@ function optionalInt(name: string, fallback: number): number {
   return n;
 }
 
+/**
+ * Ports need stricter handling than optionalInt: some shells export PORT=0,
+ * which makes the server bind to a random ephemeral port while clients keep
+ * calling the documented one. Treat 0/out-of-range as "unset".
+ */
+function optionalPort(name: string, fallback: number): number {
+  const n = optionalInt(name, fallback);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    console.warn(
+      `[ENV] Ignoring invalid ${name}=${process.env[name]} — using ${fallback}.`,
+    );
+    return fallback;
+  }
+  return n;
+}
+
 export const env = {
   DATABASE_URL: required("DATABASE_URL"),
   BETTER_AUTH_SECRET: required("BETTER_AUTH_SECRET"),
-  BETTER_AUTH_URL: optional("BETTER_AUTH_URL", "http://localhost:3300"),
-  GOOGLE_CLIENT_ID: required("GOOGLE_CLIENT_ID"),
-  GOOGLE_CLIENT_SECRET: required("GOOGLE_CLIENT_SECRET"),
-  PORT: optionalInt("PORT", 3300),
+  BETTER_AUTH_URL: optional("BETTER_AUTH_URL", "http://localhost:3001"),
+  // Browsers enforce CORS for the dashboard -> API hop. Defaults cover local
+  // development (:5173 dashboard, :3000 landing) and the deployed dashboard;
+  // extend with any additional origin rather than removing these.
+  ALLOWED_ORIGINS: optional(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://jeneviv.up.railway.app",
+  ),
+  // Google sign-in is optional: email + password still works without it.
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? "",
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  // 3001 is the port the dashboard's API client and docs use by default.
+  PORT: optionalPort("PORT", 3001),
 
   PLATFORM_FEE_NGN: optionalInt("PLATFORM_FEE_NGN", 75),
   DEFAULT_GATEWAY: optional("DEFAULT_GATEWAY", "flutterwave"),
