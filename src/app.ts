@@ -2,11 +2,14 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import { toNodeHandler } from "better-auth/node";
+import { eq } from "drizzle-orm"; // ADDED
 import express from "express";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auth } from "./auth.js";
+import { db } from "./db/index.js"; // ADDED
+import { users } from "./db/schema.js"; // ADDED
 import { env } from "./env.js";
 import { cors } from "./middleware/cors.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
@@ -67,4 +70,22 @@ app.use(errorHandler);
 
 app.listen(env.PORT, () => {
   console.log(`[START] JENEVIV BACKEND server listening on port ${env.PORT}`);
+
+  // ADDED: one-time admin bootstrap.
+  // Set BOOTSTRAP_ADMIN_EMAIL on Render, deploy, check logs, then remove the variable.
+  const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+  if (bootstrapEmail) {
+    db.update(users)
+      .set({ role: "admin" })
+      .where(eq(users.email, bootstrapEmail))
+      .returning({ email: users.email })
+      .then((rows) =>
+        console.log(
+          rows.length
+            ? `[BOOTSTRAP] ${rows[0].email} is now admin`
+            : `[BOOTSTRAP] no user found for ${bootstrapEmail}`,
+        ),
+      )
+      .catch((err) => console.error("[BOOTSTRAP] failed", err));
+  }
 });
