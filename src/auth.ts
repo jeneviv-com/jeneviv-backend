@@ -1,5 +1,6 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins"; // FIX: new import
 import { db } from "./db/index.js";
 import { accounts, sessions, users, verifications } from "./db/schema.js";
 import { env } from "./env.js";
@@ -40,9 +41,7 @@ export const auth = betterAuth({
         },
       }
     : {}),
-  // The dashboard runs on its own origin; better-auth rejects state-changing
-  // requests from origins it does not trust. Keep this list in step with the
-  // CORS allowlist so a request never passes one check and fails the other.
+  plugins: [bearer()], // FIX: lets Authorization: Bearer <token> resolve a session
   trustedOrigins: [
     baseURL,
     ...env.ALLOWED_ORIGINS.split(",")
