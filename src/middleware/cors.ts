@@ -1,15 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../env.js";
 
-/**
- * The dashboard is served from a different origin in development
- * (Vite on :5173, landing on :3000) than the API, and it sends the
- * better-auth session cookie with `credentials: "include"`. Browsers
- * require an explicit allow-origin + allow-credentials pair for that.
- *
- * Credentials echo the caller's origin back (never "*"), so only
- * origins listed in ALLOWED_ORIGINS are accepted.
- */
 const allowedOrigins = new Set(
   env.ALLOWED_ORIGINS.split(",")
     .map((origin) => origin.trim().replace(/\/$/, ""))
@@ -22,6 +13,8 @@ export function cors(req: Request, res: Response, next: NextFunction): void {
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
+    // FIX: lets the browser read the token header on sign-in/sign-up
+    res.setHeader("Access-Control-Expose-Headers", "set-auth-token");
     res.setHeader("Vary", "Origin");
   }
 
