@@ -33,6 +33,16 @@ export type TransactionStatus =
 export type PayoutStatus = "pending" | "processing" | "success" | "failed";
 export type PayoutInitiator = "merchant" | "cron";
 
+export type KycStatus = "unverified" | "nin_verified" | "verified" | "rejected";
+
+export type WithdrawalStatus =
+  | "pending_treasurer"
+  | "rejected"
+  | "processing"
+  | "success"
+  | "failed"
+  | "expired";
+
 export type RefundStatus = "pending" | "success" | "failed";
 
 export type GatewayName = "flutterwave" | "paystack" | "monnify";

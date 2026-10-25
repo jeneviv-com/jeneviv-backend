@@ -12,6 +12,7 @@ import type { z } from "zod";
 import { users } from "./auth.js";
 import type {
   EmailNotificationPeriod,
+  KycStatus,
   MerchantStatus,
   PayoutMode,
 } from "./enums.js";
@@ -63,6 +64,30 @@ export const merchants = pgTable(
       .$type<Record<string, string>>()
       .notNull()
       .default({}),
+    // Progressive KYC: collecting is open from day one, withdrawals unlock only
+    // after the NIN owner and the settlement bank account names match.
+    kycStatus: text("kyc_status")
+      .$type<KycStatus>()
+      .notNull()
+      .default("unverified"),
+    canCollect: boolean("can_collect").notNull().default(true),
+    canWithdraw: boolean("can_withdraw").notNull().default(false),
+    ninHash: text("nin_hash"),
+    ninLast4: text("nin_last4"),
+    kycLegalName: text("kyc_legal_name"),
+    kycProviderRef: text("kyc_provider_ref"),
+    ninVerifiedAt: timestamp("nin_verified_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    bankVerifiedAt: timestamp("bank_verified_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    logoUrl: text("logo_url"),
+    treasurerName: text("treasurer_name"),
+    treasurerPhone: text("treasurer_phone"),
+    escrowEnabled: boolean("escrow_enabled").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -1,0 +1,19 @@
+info:
+  name: Get KYC
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{api}}/api/merchants/me/kyc"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

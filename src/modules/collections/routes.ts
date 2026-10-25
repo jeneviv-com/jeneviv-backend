@@ -10,10 +10,13 @@ import { listCollectionTransactionsForMerchant } from "../transactions/service.j
 import {
   collectionIdParamSchema,
   createCollectionSchema,
+  exportCollectionQuerySchema,
   replaceCollectionFieldsSchema,
   shortCodeParamSchema,
   updateCollectionSchema,
+  type ExportCollectionQuery,
 } from "./schemas.js";
+import { buildCollectionExport } from "./export.js";
 import {
   createCollection,
   deleteCollection,
@@ -58,6 +61,30 @@ collectionsRouter.post(
     try {
       const result = await createCollection(req.merchant!, req.body);
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+collectionsRouter.get(
+  "/:id/export",
+  validate(collectionIdParamSchema, "params"),
+  validate(exportCollectionQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params as { id: string };
+      const { status } = req.query as unknown as ExportCollectionQuery;
+      const file = await buildCollectionExport(req.merchant!, id, status);
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${file.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+      );
+      res.send(file.buffer);
     } catch (err) {
       next(err);
     }

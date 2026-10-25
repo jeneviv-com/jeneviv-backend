@@ -41,6 +41,11 @@ export const collectionIdParamSchema = z.object({
   id: z.string().min(1),
 });
 
+export const exportCollectionQuerySchema = z.object({
+  status: z.enum(["paid", "unpaid"]).default("paid"),
+});
+export type ExportCollectionQuery = z.infer<typeof exportCollectionQuerySchema>;
+
 export const shortCodeParamSchema = z.object({
   short_code: z.string().min(1).max(64),
 });

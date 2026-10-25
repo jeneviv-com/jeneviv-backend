@@ -12,6 +12,7 @@ import { cors } from "./middleware/cors.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { webhookRawBody } from "./middleware/raw-body.js";
 import { adminRouter } from "./modules/admin/routes.js";
+import { approvalsRouter } from "./modules/approvals/routes.js";
 import { banksRouter } from "./modules/banks/routes.js";
 import { collectionsRouter } from "./modules/collections/routes.js";
 import { jobsRouter } from "./modules/jobs/routes.js";
@@ -21,7 +22,9 @@ import { payoutsRouter } from "./modules/payouts/routes.js";
 import { templatesRouter } from "./modules/templates/routes.js";
 import { transactionsRouter } from "./modules/transactions/routes.js";
 import { uploadsRouter } from "./modules/uploads/routes.js";
+import { verifyRouter } from "./modules/verify/routes.js";
 import { webhooksRouter } from "./modules/webhooks/routes.js";
+import { withdrawalsRouter } from "./modules/withdrawals/routes.js";
 
 const app = express();
 
@@ -53,6 +56,9 @@ app.use("/api/collections", collectionsRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/transactions", transactionsRouter);
 app.use("/api/payouts", payoutsRouter);
+app.use("/api/withdrawals", withdrawalsRouter);
+app.use("/api/approvals", approvalsRouter);
+app.use("/api/verify", verifyRouter);
 app.use("/api/uploads", uploadsRouter);
 app.use("/api/jobs", jobsRouter);
 

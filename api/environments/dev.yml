@@ -16,3 +16,13 @@ variables:
     value: ""
   - name: cron_secret
     value: ""
+  - name: collection_id
+    value: ""
+  - name: withdrawal_id
+    value: ""
+  - name: approval_token
+    value: ""
+  - name: treasurer_otp
+    value: ""
+  - name: receipt_reference
+    value: ""

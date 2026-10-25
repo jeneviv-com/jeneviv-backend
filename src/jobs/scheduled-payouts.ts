@@ -23,6 +23,7 @@ async function listEligibleMerchants(
     .where(
       and(
         eq(merchants.status, "approved"),
+        eq(merchants.escrowEnabled, false),
         eq(merchants.payoutMode, mode),
         isNotNull(merchants.defaultBankAccountId),
         gte(merchants.payoutsBalanceNgn, MIN_NGN_MINOR),

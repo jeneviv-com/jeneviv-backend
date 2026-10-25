@@ -20,6 +20,10 @@ import {
   markPayoutFailedByRef,
 } from "../payouts/service.js";
 import {
+  markWithdrawalCompletedByRef,
+  markWithdrawalFailedByRef,
+} from "../withdrawals/service.js";
+import {
   markRefundCompletedByRef,
   markRefundFailedByRef,
 } from "../refunds/service.js";
@@ -135,6 +139,33 @@ export async function ingestFlutterwaveWebhook(
   );
 }
 
+function getMonnifyEventId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as { eventType?: string; eventData?: Record<string, unknown> };
+  const data = root.eventData ?? {};
+  const identity =
+    data.transactionReference ?? data.paymentReference ?? data.reference;
+  if (!identity || !root.eventType) return null;
+  return `${root.eventType}:${String(identity)}`;
+}
+
+function getMonnifyEventType(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  return (payload as { eventType?: string }).eventType ?? null;
+}
+
+export async function ingestMonnifyWebhook(
+  rawBody: Buffer,
+  headers: Record<string, string | string[] | undefined>,
+): Promise<{ result: IngestResult; httpStatus: number }> {
+  return ingestWebhook(
+    "monnify",
+    { getEventId: getMonnifyEventId, getEventType: getMonnifyEventType },
+    rawBody,
+    headers,
+  );
+}
+
 export async function ingestPaystackWebhook(
   rawBody: Buffer,
   headers: Record<string, string | string[] | undefined>,
@@ -157,9 +188,11 @@ async function processNormalizedEvent(event: NormalizedEvent): Promise<void> {
       return;
     case "transfer.completed":
       await markPayoutCompletedByRef(event.reference);
+      await markWithdrawalCompletedByRef(event.reference);
       return;
     case "transfer.failed":
       await markPayoutFailedByRef(event.reference, event.reason);
+      await markWithdrawalFailedByRef(event.reference, event.reason);
       return;
     case "refund.completed":
       await markRefundCompletedByRef(event.reference);
@@ -182,7 +215,7 @@ async function handleChargeSuccess(
   // Flutterwave funds land in our balance and must be promoted to the merchant.
   // Split gateways (Paystack) settle straight to the merchant subaccount, so we
   // only record the transaction and never touch a wallet balance.
-  const holdsFunds = tx.gateway === "flutterwave";
+  const holdsFunds = tx.gateway !== "paystack";
 
   await db.transaction(async (trx) => {
     const updateRes = await trx

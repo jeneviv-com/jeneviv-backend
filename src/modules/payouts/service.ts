@@ -96,6 +96,14 @@ export function assertPayoutsEnabled(): void {
 export async function initiatePayout(args: InitiatePayoutArgs): Promise<Payout> {
   assertPayoutsEnabled();
 
+  if (args.initiatedBy === "merchant" && !args.merchant.canWithdraw) {
+    throw new HttpError(
+      403,
+      "kyc_incomplete",
+      "Withdrawals unlock after your NIN and settlement bank account are verified.",
+    );
+  }
+
   if (args.currency !== "NGN") {
     throw new HttpError(
       422,
@@ -154,6 +162,7 @@ export async function initiatePayout(args: InitiatePayoutArgs): Promise<Payout> 
       bankCode: bank.bankCode,
       accountNumber: bank.accountNumber,
       narration,
+      accountName: bank.accountName,
     });
   } catch (err) {
     const reason =

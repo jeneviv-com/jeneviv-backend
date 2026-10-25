@@ -6,7 +6,10 @@ import {
   applyMerchantSchema,
   bankAccountIdParamSchema,
   createBankAccountSchema,
+  setTreasurerSchema,
+  submitNinSchema,
   updateMerchantSettingsSchema,
+  verifyBankSchema,
 } from "./schemas.js";
 import {
   applyAsMerchant,
@@ -16,6 +19,12 @@ import {
   listMerchantBankAccounts,
   updateMerchantSettings,
 } from "./service.js";
+import {
+  setTreasurer,
+  toKycView,
+  verifyKycBank,
+  verifyNin,
+} from "../kyc/service.js";
 
 export const merchantsRouter = Router();
 
@@ -51,6 +60,57 @@ merchantsRouter.patch(
       const merchant = await getMerchantForUser(req.user!.id);
       const updated = await updateMerchantSettings(merchant, req.body);
       res.json({ merchant: updated });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+merchantsRouter.get("/me/kyc", async (req, res, next) => {
+  try {
+    const merchant = await getMerchantForUser(req.user!.id);
+    res.json({ kyc: toKycView(merchant) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+merchantsRouter.post(
+  "/me/kyc/nin",
+  validate(submitNinSchema),
+  async (req, res, next) => {
+    try {
+      const merchant = await getMerchantForUser(req.user!.id);
+      const kyc = await verifyNin(merchant, req.body.nin);
+      res.json({ kyc });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+merchantsRouter.post(
+  "/me/kyc/bank",
+  validate(verifyBankSchema),
+  async (req, res, next) => {
+    try {
+      const merchant = await getMerchantForUser(req.user!.id);
+      const kyc = await verifyKycBank(merchant, req.body);
+      res.json({ kyc });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+merchantsRouter.patch(
+  "/me/treasurer",
+  validate(setTreasurerSchema),
+  async (req, res, next) => {
+    try {
+      const merchant = await getMerchantForUser(req.user!.id);
+      const kyc = await setTreasurer(merchant, req.body);
+      res.json({ kyc });
     } catch (err) {
       next(err);
     }

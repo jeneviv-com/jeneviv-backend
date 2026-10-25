@@ -1,0 +1,14 @@
+info:
+  name: Get Receipt
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{api}}/api/verify/{{receipt_reference}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

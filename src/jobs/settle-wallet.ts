@@ -22,8 +22,10 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
       merchantId: transactions.merchantId,
       amount: transactions.amount,
       currency: transactions.currency,
+      escrowEnabled: merchants.escrowEnabled,
     })
     .from(transactions)
+    .innerJoin(merchants, eq(merchants.id, transactions.merchantId))
     .where(
       and(
         eq(transactions.status, "success"),
@@ -32,13 +34,17 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
       ),
     );
 
-  if (eligible.length === 0) return { settled: 0, total_amount_ngn: 0 };
+  // Escrow workspaces keep funds in the wallet until a treasurer-approved
+  // sweep, so they are deliberately excluded from the T+1 promotion.
+  const promotable = eligible.filter((row) => !row.escrowEnabled);
+  if (promotable.length === 0) return { settled: 0, total_amount_ngn: 0 };
 
   const now = new Date();
   let totalNgn = 0;
+  let settled = 0;
 
   await db.transaction(async (tx) => {
-    for (const row of eligible) {
+    for (const row of promotable) {
       if (row.currency !== "NGN") continue;
 
       const updated = await tx
@@ -64,6 +70,7 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
         .where(eq(merchants.id, row.merchantId));
 
       totalNgn += row.amount;
+      settled += 1;
     }
   });
 
@@ -73,9 +80,9 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
       action: "job.settle_wallet",
       entityType: "system",
       entityId: "settle-wallet",
-      metadata: { settled_count: eligible.length, total_amount_ngn: totalNgn },
+      metadata: { settled_count: settled, total_amount_ngn: totalNgn },
     });
   }
 
-  return { settled: eligible.length, total_amount_ngn: totalNgn };
+  return { settled, total_amount_ngn: totalNgn };
 }

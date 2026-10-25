@@ -1,0 +1,34 @@
+info:
+  name: Create Withdrawal
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{api}}/api/withdrawals"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 100000,
+        "currency": "NGN"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        if (res.body && res.body.withdrawal) bru.setEnvVar("withdrawal_id", res.body.withdrawal.id);
+        if (res.body && res.body.approval_link) bru.setEnvVar("approval_token", res.body.approval_link.split("/").pop());
+        if (res.body && res.body.dev_otp) bru.setEnvVar("treasurer_otp", res.body.dev_otp);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

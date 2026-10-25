@@ -16,6 +16,8 @@ export interface CreateVirtualAccountArgs {
   /** Payer email — required by gateways that charge by email (Paystack). */
   customerEmail?: string;
   customerName?: string;
+  /** Monnify reserved accounts require the payer's NIN. */
+  customerNin?: string;
   /** Merchant split destination (Paystack subaccount code). */
   subaccountCode?: string;
   /** Flat platform charge taken from the split, in minor units. */
@@ -57,6 +59,8 @@ export interface InitiateTransferArgs {
   bankCode: string;
   accountNumber: string;
   narration: string;
+  /** Beneficiary name for gateways that validate it (Monnify). */
+  accountName?: string;
 }
 
 export interface InitiateTransferResult {

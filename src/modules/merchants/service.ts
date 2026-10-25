@@ -23,7 +23,7 @@ import type {
  * collections straight to this subaccount, so we never hold merchant funds.
  * No-op for gateways that don't support subaccounts (Flutterwave).
  */
-async function ensureMerchantSubaccount(
+export async function ensureMerchantSubaccount(
   merchant: Merchant,
   bank: Pick<MerchantBankAccount, "bankCode" | "accountNumber" | "accountName">,
   force = false,
@@ -135,6 +135,7 @@ export async function updateMerchantSettings(
   const patch: Partial<typeof merchants.$inferInsert> = {};
   let bankToRepoint: MerchantBankAccount | undefined;
   if (input.display_name !== undefined) patch.displayName = input.display_name;
+  if (input.logo_url !== undefined) patch.logoUrl = input.logo_url;
   if (input.payout_mode !== undefined) patch.payoutMode = input.payout_mode;
   if (input.email_notification_for_transactions !== undefined) {
     patch.emailNotificationForTransactions =

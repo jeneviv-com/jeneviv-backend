@@ -1,0 +1,20 @@
+info:
+  name: Approve Withdrawal
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{api}}/api/approvals/{{approval_token}}/approve"
+  body:
+    type: json
+    data: |-
+      {
+        "otp": "{{treasurer_otp}}"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

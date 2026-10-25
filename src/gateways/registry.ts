@@ -1,12 +1,13 @@
 import { env } from "../env.js";
 import { flutterwaveAdapter } from "./flutterwave/adapter.js";
+import { monnifyAdapter } from "./monnify/adapter.js";
 import { paystackAdapter } from "./paystack/adapter.js";
 import type { GatewayName, PaymentGateway } from "./types.js";
 
 const adapters: Record<GatewayName, PaymentGateway | undefined> = {
   flutterwave: flutterwaveAdapter,
   paystack: paystackAdapter,
-  monnify: undefined,
+  monnify: monnifyAdapter,
 };
 
 export function getGateway(name: string): PaymentGateway {
