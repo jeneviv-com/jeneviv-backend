@@ -50,7 +50,7 @@ export const env = {
   // extend with any additional origin rather than removing these.
   ALLOWED_ORIGINS: optional(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://jeneviv.up.railway.app",
+    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://app-jeneviv.onrender.com",
   ),
   // Google sign-in is optional: email + password still works without it.
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? "",
