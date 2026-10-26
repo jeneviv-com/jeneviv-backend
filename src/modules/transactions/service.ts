@@ -1,7 +1,17 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "../../db/index.js";
 import type { User } from "../../db/schema/auth.js";
 import { collections } from "../../db/schema/collections.js";
+import type { TransactionStatus } from "../../db/schema/enums.js";
 import { merchants, type Merchant } from "../../db/schema/merchants.js";
 import {
   paymentAccounts,
@@ -74,7 +84,7 @@ export async function listCollectionTransactionsForMerchant(
     throw new HttpError(404, "not_found", "Collection not found");
   }
 
-  const filters = [
+  const filters: SQL[] = [
     eq(transactions.collectionId, collectionId),
     eq(transactions.merchantId, merchant.id),
   ];
@@ -100,12 +110,12 @@ export async function listCollectionTransactionsForMerchant(
 export async function listTransactionsForMerchant(
   merchant: Merchant,
   query: {
-    status?: Transaction["status"];
+    status?: TransactionStatus;
     limit: number;
     offset: number;
   },
 ): Promise<{ transactions: Transaction[] }> {
-  const filters = [eq(transactions.merchantId, merchant.id)];
+  const filters: SQL[] = [eq(transactions.merchantId, merchant.id)];
   if (query.status) filters.push(eq(transactions.status, query.status));
 
   const rows = await db
