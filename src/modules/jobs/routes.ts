@@ -6,6 +6,10 @@ import { HttpError } from "../../middleware/error.js";
 
 export const jobsRouter = Router();
 
+// Keep error bodies short. Cron services (cron-job.org etc.) reject oversized
+// responses, and full upstream error text belongs in the server logs, not here.
+const MAX_ERROR_MESSAGE_LENGTH = 300;
+
 function requireCronSecret(
   req: Request,
   _res: Response,
@@ -58,12 +62,13 @@ jobsRouter.post("/:name/run", requireCronSecret, async (req, res, next) => {
       result,
     });
   } catch (err) {
+    const fullMessage = err instanceof Error ? err.message : String(err);
     console.error(`[jobs] ${name} failed:`, err);
     res.status(500).json({
       job: name,
       status: "error",
       duration_ms: Date.now() - startedAt,
-      message: err instanceof Error ? err.message : String(err),
+      message: fullMessage.slice(0, MAX_ERROR_MESSAGE_LENGTH),
     });
   }
 });
