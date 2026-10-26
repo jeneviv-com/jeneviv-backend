@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Transaction } from "../../db/schema/transactions.js";
+import type { TransactionStatus } from "../../db/schema/enums.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { requireMerchant } from "../../middleware/require-merchant.js";
 import { validate } from "../../middleware/validate.js";
@@ -22,7 +22,7 @@ transactionsRouter.get("/", requireMerchant, async (req, res, next) => {
   try {
     const status =
       typeof req.query.status === "string"
-        ? (req.query.status as Transaction["status"])
+        ? (req.query.status as TransactionStatus)
         : undefined;
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
