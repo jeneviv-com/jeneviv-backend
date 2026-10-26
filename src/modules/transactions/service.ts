@@ -99,7 +99,11 @@ export async function listCollectionTransactionsForMerchant(
  */
 export async function listTransactionsForMerchant(
   merchant: Merchant,
-  query: { status?: string; limit: number; offset: number },
+  query: {
+    status?: Transaction["status"];
+    limit: number;
+    offset: number;
+  },
 ): Promise<{ transactions: Transaction[] }> {
   const filters = [eq(transactions.merchantId, merchant.id)];
   if (query.status) filters.push(eq(transactions.status, query.status));
