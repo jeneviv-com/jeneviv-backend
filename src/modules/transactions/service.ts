@@ -93,6 +93,28 @@ export async function listCollectionTransactionsForMerchant(
   return { transactions: rows };
 }
 
+/**
+ * Merchant-wide list across all of the merchant's collections.
+ * Used by GET /api/transactions.
+ */
+export async function listTransactionsForMerchant(
+  merchant: Merchant,
+  query: { status?: string; limit: number; offset: number },
+): Promise<{ transactions: Transaction[] }> {
+  const filters = [eq(transactions.merchantId, merchant.id)];
+  if (query.status) filters.push(eq(transactions.status, query.status));
+
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(and(...filters))
+    .orderBy(desc(transactions.createdAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return { transactions: rows };
+}
+
 export async function reconcileTransactionsForMerchant(
   merchant: Merchant,
   ids: string[],
