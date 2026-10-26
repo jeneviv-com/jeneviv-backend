@@ -81,6 +81,14 @@ export interface InitiateRefundResult {
   status: "pending" | "success" | "failed";
 }
 
+export interface RetryRefundArgs {
+  /** Gateway-side refund id (not our reference). */
+  gatewayRefundId: string;
+  accountNumber: string;
+  bankCode: string;
+  currency: string;
+}
+
 export interface BankSummary {
   code: string;
   name: string;
@@ -121,13 +129,23 @@ export type NormalizedEvent =
       type: "refund.completed";
       gatewayId: string;
       reference: string;
+      gatewayRefundId?: string;
       raw: unknown;
     }
   | {
       type: "refund.failed";
       gatewayId: string;
       reference: string;
+      gatewayRefundId?: string;
       reason: string;
+      raw: unknown;
+    }
+  | {
+      type: "refund.needs_attention";
+      gatewayId: string;
+      reference: string;
+      gatewayRefundId?: string;
+      reason?: string;
       raw: unknown;
     };
 
@@ -160,6 +178,12 @@ export interface PaymentGateway {
   initiateTransfer(args: InitiateTransferArgs): Promise<InitiateTransferResult>;
 
   initiateRefund(args: InitiateRefundArgs): Promise<InitiateRefundResult>;
+
+  /**
+   * Supply payer bank details for a refund the gateway could not route
+   * (`needs-attention`). Only split gateways that expose this implement it.
+   */
+  retryRefund?(args: RetryRefundArgs): Promise<InitiateRefundResult>;
 
   verifyWebhookSignature(
     rawBody: Buffer,

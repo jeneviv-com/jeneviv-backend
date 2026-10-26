@@ -26,6 +26,7 @@ import {
 import {
   markRefundCompletedByRef,
   markRefundFailedByRef,
+  markRefundNeedsAttentionByRef,
 } from "../refunds/service.js";
 
 export interface IngestResult {
@@ -195,10 +196,21 @@ async function processNormalizedEvent(event: NormalizedEvent): Promise<void> {
       await markWithdrawalFailedByRef(event.reference, event.reason);
       return;
     case "refund.completed":
-      await markRefundCompletedByRef(event.reference);
+      await markRefundCompletedByRef(event.reference, event.gatewayRefundId);
       return;
     case "refund.failed":
-      await markRefundFailedByRef(event.reference, event.reason);
+      await markRefundFailedByRef(
+        event.reason,
+        event.reference,
+        event.gatewayRefundId,
+      );
+      return;
+    case "refund.needs_attention":
+      await markRefundNeedsAttentionByRef(
+        event.reason,
+        event.reference,
+        event.gatewayRefundId,
+      );
       return;
   }
 }

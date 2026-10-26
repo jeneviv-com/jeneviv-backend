@@ -49,7 +49,11 @@ interface PsRefundData {
   id?: number | string;
   transaction_reference?: string;
   reference?: string;
+  refund_reference?: string;
   status?: string;
+  reason?: string;
+  message?: string;
+  customer_note?: string;
   merchant_note?: string;
 }
 
@@ -129,17 +133,41 @@ export function parsePaystackEvent(payload: unknown): NormalizedEvent | null {
 
   if (event.startsWith("refund.")) {
     const d = data as PsRefundData;
-    const reference = asString(d.reference) ?? asString(d.transaction_reference);
-    const gatewayId = asString(d.id) ?? reference;
+    const reference =
+      asString(d.transaction_reference) ?? asString(d.reference);
+    const gatewayRefundId =
+      asString(d.id) ?? asString(d.refund_reference);
+    const gatewayId = gatewayRefundId ?? reference;
     if (!reference || !gatewayId) return null;
     if (event === "refund.processed") {
-      return { type: "refund.completed", gatewayId, reference, raw: payload };
+      return {
+        type: "refund.completed",
+        gatewayId,
+        reference,
+        gatewayRefundId,
+        raw: payload,
+      };
+    }
+    if (event === "refund.needs-attention") {
+      return {
+        type: "refund.needs_attention",
+        gatewayId,
+        reference,
+        gatewayRefundId,
+        reason:
+          asString(d.reason) ??
+          asString(d.message) ??
+          asString(d.customer_note) ??
+          "The gateway needs the payer's bank account to finish this refund",
+        raw: payload,
+      };
     }
     if (event === "refund.failed") {
       return {
         type: "refund.failed",
         gatewayId,
         reference,
+        gatewayRefundId,
         reason: asString(d.merchant_note) ?? asString(d.status) ?? "failed",
         raw: payload,
       };
@@ -159,8 +187,17 @@ export function getPaystackEventId(payload: unknown): string | null {
   const event = asString(envelope.event);
   const data = envelope.data;
   if (!event || !data || typeof data !== "object") return null;
-  const d = data as { id?: number | string; reference?: string };
-  const resourceId = asString(d.id) ?? asString(d.reference);
+  const d = data as {
+    id?: number | string;
+    reference?: string;
+    refund_reference?: string;
+    transaction_reference?: string;
+  };
+  const resourceId =
+    asString(d.id) ??
+    asString(d.refund_reference) ??
+    asString(d.reference) ??
+    asString(d.transaction_reference);
   if (!resourceId) return null;
   return `${event}:${resourceId}`;
 }

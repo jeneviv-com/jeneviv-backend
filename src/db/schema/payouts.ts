@@ -66,6 +66,9 @@ export const refunds = pgTable("refunds", {
   reason: text("reason"),
   status: text("status").$type<RefundStatus>().notNull().default("pending"),
   gatewayRef: text("gateway_ref"),
+  /** Gateway-side id, needed to retry a refund that needs payer bank details. */
+  gatewayRefundId: text("gateway_refund_id"),
+  failureReason: text("failure_reason"),
   initiatedByUid: text("initiated_by_uid").references(() => users.id, {
     onDelete: "set null",
   }),

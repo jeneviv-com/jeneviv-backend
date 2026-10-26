@@ -43,6 +43,10 @@ export type WithdrawalStatus =
   | "failed"
   | "expired";
 
-export type RefundStatus = "pending" | "success" | "failed";
+export type RefundStatus =
+  | "pending"
+  | "needs_attention"
+  | "success"
+  | "failed";
 
 export type GatewayName = "flutterwave" | "paystack" | "monnify";

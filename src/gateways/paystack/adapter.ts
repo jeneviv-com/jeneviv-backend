@@ -11,6 +11,7 @@ import type {
   NormalizedEvent,
   PaymentGateway,
   ResolveAccountNameArgs,
+  RetryRefundArgs,
 } from "../types.js";
 import { GatewayError } from "../types.js";
 import { psRequest } from "./client.js";
@@ -57,6 +58,7 @@ interface PsChargeResponse {
 }
 
 interface PsBank {
+  id?: number;
   code: string;
   name: string;
 }
@@ -74,10 +76,25 @@ interface PsRefund {
 const REFUND_STATUS_MAP: Record<string, InitiateRefundResult["status"]> = {
   pending: "pending",
   processing: "pending",
+  "needs-attention": "pending",
   processed: "success",
   success: "success",
   failed: "failed",
 };
+
+function parseRefundResponse(
+  body: PsEnvelope<PsRefund> | undefined,
+): InitiateRefundResult {
+  const refund = body?.data;
+  if (!refund?.id) {
+    throw new GatewayError("paystack", "Refund response missing id", {
+      raw: body,
+    });
+  }
+  const status =
+    REFUND_STATUS_MAP[(refund.status ?? "").toLowerCase()] ?? "pending";
+  return { gatewayRefundId: String(refund.id), status };
+}
 
 function splitName(name: string): { first: string; last: string } {
   const trimmed = (name ?? "").trim();
@@ -246,15 +263,41 @@ export const paystackAdapter: PaymentGateway = {
         merchant_note: args.reason ?? "Refund requested",
       },
     });
-    const refund = res.data?.data;
-    if (!refund?.id) {
-      throw new GatewayError("paystack", "Refund response missing id", {
-        raw: res.data,
-      });
+    return parseRefundResponse(res.data);
+  },
+
+  async retryRefund(
+    args: RetryRefundArgs,
+  ): Promise<InitiateRefundResult> {
+    // Paystack's retry endpoint expects its numeric bank id, while the rest of
+    // our system stores the bank code.
+    const banks = await psRequest<PsEnvelope<PsBank[]>>({
+      method: "GET",
+      path: "/bank",
+      query: { country: "nigeria", perPage: 1000 },
+    });
+    const bank = (banks.data?.data ?? []).find(
+      (item) => item?.code === args.bankCode,
+    );
+    if (!bank?.id) {
+      throw new GatewayError(
+        "paystack",
+        `Unknown Paystack bank id for bank code ${args.bankCode}`,
+      );
     }
-    const status =
-      REFUND_STATUS_MAP[(refund.status ?? "").toLowerCase()] ?? "pending";
-    return { gatewayRefundId: String(refund.id), status };
+
+    const res = await psRequest<PsEnvelope<PsRefund>>({
+      method: "POST",
+      path: `/refund/retry_with_customer_details/${encodeURIComponent(args.gatewayRefundId)}`,
+      body: {
+        refund_account_details: {
+          currency: args.currency,
+          account_number: args.accountNumber,
+          bank_id: String(bank.id),
+        },
+      },
+    });
+    return parseRefundResponse(res.data);
   },
 
   verifyWebhookSignature(
