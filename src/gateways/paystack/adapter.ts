@@ -166,13 +166,16 @@ export const paystackAdapter: PaymentGateway = {
       amount: args.amount,
       reference: args.reference,
       subaccount: args.subaccountCode,
-      bearer: "subaccount",
+      // Jeneviv's share pays Paystack's fee, so the merchant receives the full amount.
+      bearer: "account",
       bank_transfer: {
         account_expires_at: new Date(
           Date.now() + args.expirySeconds * 1000,
         ).toISOString(),
       },
     };
+    // transaction_charge = platform fee + Paystack fee. Paystack deducts its own fee
+    // from this share (bearer: account), leaving Jeneviv with the platform fee.
     if (args.platformFeeMinor && args.platformFeeMinor > 0) {
       body.transaction_charge = args.platformFeeMinor;
     }
