@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import {
   templateFields,
@@ -20,6 +20,8 @@ export interface ActorContext {
   isAdmin: boolean;
   merchantId: string | null;
 }
+
+export type TemplateWithFields = Template & { fields: TemplateField[] };
 
 function ensureCanWrite(template: Template, actor: ActorContext): void {
   const isPlatform = template.merchantId === null;
@@ -50,7 +52,7 @@ function ensureCanRead(template: Template, actor: ActorContext): void {
 export async function listTemplates(
   actor: ActorContext,
   query: ListTemplatesQuery,
-): Promise<Template[]> {
+): Promise<TemplateWithFields[]> {
   const ownClause = actor.merchantId
     ? eq(templates.merchantId, actor.merchantId)
     : undefined;
@@ -77,10 +79,34 @@ export async function listTemplates(
     }
   }
 
-  return db.query.templates.findMany({
+  const rows = await db.query.templates.findMany({
     where,
     orderBy: asc(templates.createdAt),
   });
+  if (rows.length === 0) return [];
+
+  // The dashboard lists what each template asks for, and the field editor opens
+  // from the list — so the fields travel with the list instead of one request
+  // per template.
+  const fields = await db.query.templateFields.findMany({
+    where: inArray(
+      templateFields.templateId,
+      rows.map((row) => row.id),
+    ),
+    orderBy: [asc(templateFields.position), asc(templateFields.fieldId)],
+  });
+
+  const byTemplate = new Map<string, TemplateField[]>();
+  for (const field of fields) {
+    const list = byTemplate.get(field.templateId) ?? [];
+    list.push(field);
+    byTemplate.set(field.templateId, list);
+  }
+
+  return rows.map((template) => ({
+    ...template,
+    fields: byTemplate.get(template.id) ?? [],
+  }));
 }
 
 export async function getTemplate(

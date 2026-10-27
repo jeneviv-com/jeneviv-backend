@@ -11,6 +11,7 @@ import { env } from "./env.js";
 import { cors } from "./middleware/cors.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { webhookRawBody } from "./middleware/raw-body.js";
+import { snakeCaseResponses } from "./middleware/snake-case.js";
 import { adminRouter } from "./modules/admin/routes.js";
 import { approvalsRouter } from "./modules/approvals/routes.js";
 import { banksRouter } from "./modules/banks/routes.js";
@@ -40,6 +41,10 @@ if (existsSync(publicDir)) {
 
 app.all("/api/auth", toNodeHandler(auth));
 app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+// better-auth owns its own response shape, so this runs after it and before
+// every other /api route.
+app.use("/api", snakeCaseResponses);
 
 app.use("/api/webhooks", webhookRawBody, webhooksRouter);
 

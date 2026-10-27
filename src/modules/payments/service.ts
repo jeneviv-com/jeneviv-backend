@@ -21,7 +21,8 @@ import { env } from "../../env.js";
 import { getDefaultGateway } from "../../gateways/registry.js";
 import { GatewayError } from "../../gateways/types.js";
 import { isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
-import { computeTotalCharge } from "../../lib/fees.js";
+import { computeCharge } from "../../lib/fees.js";
+import { toMajor, toMinor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import type { InitPaymentInput } from "./schemas.js";
@@ -238,10 +239,15 @@ export async function initPayment(
   }
 
   const collectionForResult = collection as Collection;
-  const breakdown = computeTotalCharge({
-    amount: collectionForResult.amount,
-    currency: collectionForResult.currency,
-  });
+  const currency = collectionForResult.currency;
+  const gateway = getDefaultGateway();
+  // fees.ts works in whole naira, which is the unit collections and
+  // transactions store. Gateways work in minor units, so convert only at the
+  // boundary in createVirtualAccount below.
+  const breakdown = computeCharge(
+    collectionForResult.amount,
+    gateway.name === "paystack" ? "paystack" : "other",
+  );
 
   const validatedValues: Array<{
     fieldId: string;
@@ -261,8 +267,6 @@ export async function initPayment(
       });
     }
   }
-
-  const gateway = getDefaultGateway();
 
   let subaccountCode: string | undefined;
   if (gateway.ensureSubaccount) {
@@ -297,12 +301,12 @@ export async function initPayment(
       customerId,
       customerEmail: user.email,
       customerName: user.name,
-      amount: breakdown.total,
-      currency: collectionForResult.currency,
+      amount: toMinor(breakdown.total, currency),
+      currency,
       narration,
       expirySeconds: env.VIRTUAL_ACCOUNT_EXPIRY_SECONDS,
       subaccountCode,
-      platformFeeMinor: breakdown.platformFee,
+      platformFeeMinor: toMinor(breakdown.platformFee, currency),
     });
   } catch (err) {
     if (err instanceof GatewayError) {
@@ -317,7 +321,9 @@ export async function initPayment(
 
   // Split gateways (Paystack) gross up the customer charge to cover their fee,
   // so the real gateway fee is only known once the account is created.
-  const totalCharged = virtualAccount.totalCharged;
+  // Gateways report in minor units; keep transactions in naira like the rest
+  // of the system.
+  const totalCharged = toMajor(virtualAccount.totalCharged, currency);
   const gatewayFee = Math.max(
     0,
     totalCharged - (breakdown.amount + breakdown.platformFee),

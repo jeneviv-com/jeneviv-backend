@@ -14,6 +14,7 @@ import {
 import { getGateway } from "../../gateways/registry.js";
 import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
+import { toMajor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import {
   markPayoutCompletedByRef,
@@ -236,13 +237,17 @@ async function handleChargeSuccess(
         status: "success",
         paidAt: event.paidAt,
         gatewayId: event.gatewayId,
-        updatedAt: new Date(),
-        ...(holdsFunds
-          ? {
-              gatewayFee: event.gatewayFee,
-              totalCharged: tx.totalCharged - tx.gatewayFee + event.gatewayFee,
-            }
-          : { settledAt: event.paidAt }),
+        updatedAt: new Date(),          ...(holdsFunds
+            ? {
+                // Normalized events report gateway fees in minor units;
+                // transactions are stored in naira.
+                gatewayFee: toMajor(event.gatewayFee, event.currency),
+                totalCharged:
+                  tx.totalCharged -
+                  tx.gatewayFee +
+                  toMajor(event.gatewayFee, event.currency),
+              }
+            : { settledAt: event.paidAt }),
       })
       .where(eq(transactions.id, tx.id))
       .returning({ id: transactions.id });
@@ -269,7 +274,7 @@ async function handleChargeSuccess(
       gateway: tx.gateway,
       gateway_id: event.gatewayId,
       amount: tx.amount,
-      gateway_fee: event.gatewayFee,
+      gateway_fee: toMajor(event.gatewayFee, event.currency),
       currency: tx.currency,
       settled_direct: !holdsFunds,
     },

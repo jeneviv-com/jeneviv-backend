@@ -105,8 +105,10 @@ export async function buildCollectionExport(
     const values: Record<string, string | number> = {
       reference: row.reference,
       payer: payerNames.get(row.customerId) ?? "",
-      amount: row.amount / 100,
-      fees: (row.platformFee + row.gatewayFee) / 100,
+      // Transactions are stored in whole naira, the same unit the dashboard
+      // and collections use, so no minor-unit conversion is needed here.
+      amount: row.amount,
+      fees: row.platformFee + row.gatewayFee,
       status: row.status,
       paid_at: row.paidAt?.toISOString() ?? "",
       created_at: row.createdAt.toISOString(),
