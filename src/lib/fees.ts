@@ -45,6 +45,13 @@ export const PAYSTACK_FLAT_NGN = 100;
 export const PAYSTACK_FLAT_APPLIES_FROM_NGN = 2_500;
 export const PAYSTACK_CAP_NGN = 2_000; // unverified
 
+/*
+ * TEST SWITCH. false = send only collection + platform fee and let Paystack
+ * apply its own fee. true = Jeneviv adds Paystack's fee to the payer's charge.
+ * Leave false until a test payment shows how Paystack behaves.
+ */
+export const PAYSTACK_GROSS_UP = false;
+
 export function paystackFeeNgn(chargeNgn: number): number {
   const percent = Math.ceil((chargeNgn * PAYSTACK_PERCENT_BASIS_POINTS) / 10_000);
   const flat = chargeNgn >= PAYSTACK_FLAT_APPLIES_FROM_NGN ? PAYSTACK_FLAT_NGN : 0;
@@ -52,7 +59,7 @@ export function paystackFeeNgn(chargeNgn: number): number {
 }
 
 /**
- * Option A: the payer covers Paystack's processing fee.
+ * When PAYSTACK_GROSS_UP is true, the payer covers Paystack's processing fee.
  *
  * The merchant receives exactly the collection amount, Jeneviv keeps its
  * platform fee, and the processing fee is added to the payer's charge. The fee
@@ -62,7 +69,7 @@ export function computeCharge(amountNgn: number, gateway: "paystack" | "other"):
   const platformFee = platformFeeNgn(amountNgn);
   const base = amountNgn + platformFee;
 
-  if (gateway !== "paystack") {
+  if (gateway !== "paystack" || !PAYSTACK_GROSS_UP) {
     return { amount: amountNgn, platformFee, gatewayFee: 0, total: base };
   }
 
