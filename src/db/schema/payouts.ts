@@ -1,5 +1,5 @@
 import {
-  bigint,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -8,11 +8,12 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { users } from "./auth.js";
-import type {
-  GatewayName,
-  PayoutInitiator,
-  PayoutStatus,
-  RefundStatus,
+import {
+  MONEY_PRECISION,
+  type GatewayName,
+  type PayoutInitiator,
+  type PayoutStatus,
+  type RefundStatus,
 } from "./enums.js";
 import { merchantBankAccounts, merchants } from "./merchants.js";
 import { transactions } from "./transactions.js";
@@ -30,7 +31,7 @@ export const payouts = pgTable(
     accountNumber: text("account_number").notNull(),
     accountName: text("account_name").notNull(),
     bankCode: text("bank_code").notNull(),
-    amount: bigint("amount", { mode: "number" }).notNull(),
+    amount: numeric("amount", MONEY_PRECISION).notNull(),
     currency: text("currency").notNull(),
     status: text("status")
       .$type<PayoutStatus>()
@@ -62,7 +63,7 @@ export const refunds = pgTable("refunds", {
   merchantId: text("merchant_id")
     .notNull()
     .references(() => merchants.id, { onDelete: "restrict" }),
-  amount: bigint("amount", { mode: "number" }).notNull(),
+  amount: numeric("amount", MONEY_PRECISION).notNull(),
   reason: text("reason"),
   status: text("status").$type<RefundStatus>().notNull().default("pending"),
   gatewayRef: text("gateway_ref"),

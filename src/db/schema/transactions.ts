@@ -1,6 +1,6 @@
 import {
-  bigint,
   boolean,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -10,7 +10,7 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { users } from "./auth.js";
 import { collections } from "./collections.js";
-import type { GatewayName, TransactionStatus } from "./enums.js";
+import { MONEY_PRECISION, type GatewayName, type TransactionStatus } from "./enums.js";
 import { merchants } from "./merchants.js";
 
 export const transactions = pgTable(
@@ -31,10 +31,12 @@ export const transactions = pgTable(
       .$type<TransactionStatus>()
       .notNull()
       .default("pending"),
-    amount: bigint("amount", { mode: "number" }).notNull(),
-    platformFee: bigint("platform_fee", { mode: "number" }).notNull(),
-    gatewayFee: bigint("gateway_fee", { mode: "number" }).notNull().default(0),
-    totalCharged: bigint("total_charged", { mode: "number" }).notNull(),
+    // Naira, not whole naira: the gateway fee is a percentage, so a payment of
+    // ₦200 can legitimately total ₦284.27. An integer column rejects those rows.
+    amount: numeric("amount", MONEY_PRECISION).notNull(),
+    platformFee: numeric("platform_fee", MONEY_PRECISION).notNull(),
+    gatewayFee: numeric("gateway_fee", MONEY_PRECISION).notNull().default(0),
+    totalCharged: numeric("total_charged", MONEY_PRECISION).notNull(),
     currency: text("currency").notNull(),
     gateway: text("gateway").$type<GatewayName>().notNull(),
     gatewayRef: text("gateway_ref"),

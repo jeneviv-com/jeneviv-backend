@@ -1,7 +1,7 @@
 import {
-  bigint,
   boolean,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -10,11 +10,12 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { users } from "./auth.js";
-import type {
-  EmailNotificationPeriod,
-  KycStatus,
-  MerchantStatus,
-  PayoutMode,
+import {
+  MONEY_PRECISION,
+  type EmailNotificationPeriod,
+  type KycStatus,
+  type MerchantStatus,
+  type PayoutMode,
 } from "./enums.js";
 
 export const merchants = pgTable(
@@ -30,10 +31,10 @@ export const merchants = pgTable(
       .$type<MerchantStatus>()
       .notNull()
       .default("pending"),
-    walletBalanceNgn: bigint("wallet_balance_ngn", { mode: "number" })
+    walletBalanceNgn: numeric("wallet_balance_ngn", MONEY_PRECISION)
       .notNull()
       .default(0),
-    payoutsBalanceNgn: bigint("payouts_balance_ngn", { mode: "number" })
+    payoutsBalanceNgn: numeric("payouts_balance_ngn", MONEY_PRECISION)
       .notNull()
       .default(0),
     payoutMode: text("payout_mode")

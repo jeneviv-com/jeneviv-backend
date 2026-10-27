@@ -30,6 +30,20 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    additionalFields: {
+      // Without this the session user comes back without `role`, so the
+      // dashboard's `isAdmin` check is never true and the admin console (and
+      // the merchant approval queue behind it) is unreachable. `input: false`
+      // keeps it out of sign-up payloads — only the database sets a role.
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false,
+      },
+    },
+  },
   ...(googleEnabled
     ? {
         socialProviders: {

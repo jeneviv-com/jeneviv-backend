@@ -2,11 +2,13 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import {
   collectionFields,
+  collectionGroups,
   collections,
   templateFields,
   templates,
   type Collection,
   type CollectionField,
+  type CollectionGroup,
 } from "../../db/schema/collections.js";
 import {
   merchantBankAccounts,
@@ -118,6 +120,32 @@ async function ensureTemplateUsable(
   }
 }
 
+async function loadGroup(
+  groupId: string | null,
+): Promise<CollectionGroup | null> {
+  if (!groupId) return null;
+  const group = await db.query.collectionGroups.findFirst({
+    where: eq(collectionGroups.id, groupId),
+  });
+  return group ?? null;
+}
+
+async function ensureGroupUsable(
+  merchant: Merchant,
+  groupId: string,
+): Promise<CollectionGroup> {
+  const group = await db.query.collectionGroups.findFirst({
+    where: and(
+      eq(collectionGroups.id, groupId),
+      eq(collectionGroups.merchantId, merchant.id),
+    ),
+  });
+  if (!group) {
+    throw new HttpError(422, "invalid_group", "Group not found");
+  }
+  return group;
+}
+
 async function ensurePayoutSetupComplete(merchant: Merchant): Promise<void> {
   // Collections must have a payout destination before they can take money —
   // for split gateways (Paystack) this bank account is what the settlement
@@ -147,6 +175,9 @@ export async function createCollection(
   if (input.template_id) {
     await ensureTemplateUsable(input.template_id, merchant);
   }
+  if (input.group_id) {
+    await ensureGroupUsable(merchant, input.group_id);
+  }
 
   const id = newId();
   const shortCode = await generateUniqueShortCode();
@@ -157,6 +188,7 @@ export async function createCollection(
       .values({
         id,
         merchantId: merchant.id,
+        groupId: input.group_id ?? null,
         shortCode,
         name: input.name,
         description: input.description ?? null,
@@ -207,24 +239,36 @@ export async function createCollection(
 
 export async function listMerchantCollections(
   merchantId: string,
-): Promise<CollectionWithStats[]> {
-  const rows = await db.query.collections.findMany({
-    where: eq(collections.merchantId, merchantId),
-    orderBy: desc(collections.createdAt),
-  });
+): Promise<Array<CollectionWithStats & { group: CollectionGroup | null }>> {
+  const [rows, groups] = await Promise.all([
+    db.query.collections.findMany({
+      where: eq(collections.merchantId, merchantId),
+      orderBy: desc(collections.createdAt),
+    }),
+    db.query.collectionGroups.findMany({
+      where: eq(collectionGroups.merchantId, merchantId),
+    }),
+  ]);
   if (rows.length === 0) return [];
 
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
   const stats = await loadCollectionStats(merchantId);
   return rows.map((collection) => ({
     ...collection,
     stats: stats.get(collection.id) ?? { ...EMPTY_STATS },
+    group: collection.groupId
+      ? (groupsById.get(collection.groupId) ?? null)
+      : null,
   }));
 }
 
 export async function getMerchantCollection(
   merchant: Merchant,
   collectionId: string,
-): Promise<{ collection: CollectionWithStats; fields: CollectionField[] }> {
+): Promise<{
+  collection: CollectionWithStats & { group: CollectionGroup | null };
+  fields: CollectionField[];
+}> {
   const collection = await db.query.collections.findFirst({
     where: and(
       eq(collections.id, collectionId),
@@ -234,17 +278,19 @@ export async function getMerchantCollection(
   if (!collection) {
     throw new HttpError(404, "not_found", "Collection not found");
   }
-  const [fields, stats] = await Promise.all([
+  const [fields, stats, group] = await Promise.all([
     db.query.collectionFields.findMany({
       where: eq(collectionFields.collectionId, collection.id),
       orderBy: [asc(collectionFields.position), asc(collectionFields.fieldId)],
     }),
     loadCollectionStats(merchant.id, collection.id),
+    loadGroup(collection.groupId),
   ]);
   return {
     collection: {
       ...collection,
       stats: stats.get(collection.id) ?? { ...EMPTY_STATS },
+      group,
     },
     fields,
   };
@@ -281,6 +327,12 @@ export async function updateCollection(
   }
   if (input.reconciliation_label !== undefined) {
     patch.reconciliationLabel = input.reconciliation_label;
+  }
+  if (input.group_id !== undefined) {
+    if (input.group_id !== null) {
+      await ensureGroupUsable(merchant, input.group_id);
+    }
+    patch.groupId = input.group_id;
   }
 
   const [updated] = await db
@@ -365,7 +417,11 @@ export async function replaceCollectionFields(
 
 export async function getCollectionByShortCode(
   shortCode: string,
-): Promise<{ collection: Collection; fields: CollectionField[] }> {
+): Promise<{
+  collection: Collection;
+  fields: CollectionField[];
+  group: CollectionGroup | null;
+}> {
   const collection = await db.query.collections.findFirst({
     where: eq(collections.shortCode, shortCode),
   });
@@ -379,5 +435,7 @@ export async function getCollectionByShortCode(
     where: eq(collectionFields.collectionId, collection.id),
     orderBy: [asc(collectionFields.position), asc(collectionFields.fieldId)],
   });
-  return { collection, fields };
+  // The payer page shows the group's name and logo when the collection is filed
+  // under one, so it has to travel with the collection.
+  return { collection, fields, group: await loadGroup(collection.groupId) };
 }

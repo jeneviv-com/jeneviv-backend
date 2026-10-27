@@ -1,3 +1,14 @@
+/**
+ * Every money column is naira with two decimal places, because fees are a
+ * percentage: a ₦200 collection can legitimately be charged ₦284.27. Integer
+ * (bigint) money columns reject those rows at insert time.
+ */
+export const MONEY_PRECISION: {
+  precision: number;
+  scale: number;
+  mode: "number";
+} = { precision: 14, scale: 2, mode: "number" };
+
 export type UserRole = "user" | "admin";
 export type UserMethod = "email" | "google";
 

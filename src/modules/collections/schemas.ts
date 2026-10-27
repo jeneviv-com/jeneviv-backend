@@ -11,6 +11,8 @@ export const createCollectionSchema = z.object({
   reconciliation_enabled: z.boolean().optional(),
   reconciliation_label: z.string().trim().min(1).max(80).optional(),
   template_id: z.string().min(1).optional(),
+  /** Entity the collection is filed under. Must belong to this merchant. */
+  group_id: z.string().min(1).nullable().optional(),
 });
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;
 
@@ -24,6 +26,7 @@ export const updateCollectionSchema = z
     is_active: z.boolean().optional(),
     reconciliation_enabled: z.boolean().optional(),
     reconciliation_label: z.string().trim().min(1).max(80).nullable().optional(),
+    group_id: z.string().min(1).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "At least one field required",

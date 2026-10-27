@@ -1,13 +1,22 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
+import { users } from "../../db/schema/auth.js";
+import { collections } from "../../db/schema/collections.js";
 import {
   merchants,
   type Merchant,
 } from "../../db/schema/merchants.js";
+import { auditLogs, type AuditLog } from "../../db/schema/platform.js";
+import { payouts } from "../../db/schema/payouts.js";
+import { transactions } from "../../db/schema/transactions.js";
 import type { MerchantStatus } from "../../db/schema/enums.js";
 import { recordAudit } from "../../lib/audit.js";
 import { HttpError } from "../../middleware/error.js";
-import type { ListMerchantsQuery } from "./schemas.js";
+import type {
+  ListAuditLogsQuery,
+  ListMerchantsQuery,
+  ListPlatformTransactionsQuery,
+} from "./schemas.js";
 
 export async function listMerchants(
   query: ListMerchantsQuery,
@@ -19,6 +28,117 @@ export async function listMerchants(
     limit: query.limit,
     offset: query.offset,
   });
+}
+
+/* ------------------------------------------------------------- reporting */
+
+export interface AdminStats {
+  total_merchants: number;
+  pending_merchants: number;
+  total_transactions: number;
+  total_volume: number;
+  pending_payouts: number;
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const [byStatus, txTotals, payoutTotals] = await Promise.all([
+    db
+      .select({
+        status: merchants.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(merchants)
+      .groupBy(merchants.status),
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        // numeric sums come back as strings; cast so the API emits a number.
+        volume: sql<number>`coalesce(sum(${transactions.amount}), 0)::float8`,
+      })
+      .from(transactions)
+      .where(eq(transactions.status, "success")),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(payouts)
+      .where(inArray(payouts.status, ["pending", "processing"])),
+  ]);
+
+  const statusCount = (status: MerchantStatus) =>
+    byStatus.find((row) => row.status === status)?.count ?? 0;
+
+  return {
+    total_merchants: byStatus.reduce((sum, row) => sum + row.count, 0),
+    pending_merchants: statusCount("pending"),
+    total_transactions: txTotals[0]?.count ?? 0,
+    total_volume: Number(txTotals[0]?.volume ?? 0),
+    pending_payouts: payoutTotals[0]?.count ?? 0,
+  };
+}
+
+export interface PlatformTransactionRow {
+  id: string;
+  reference: string;
+  status: string;
+  amount: number;
+  currency: string;
+  created_at: Date;
+  collection_name: string | null;
+  payer_name: string | null;
+  payer_email: string | null;
+  merchant_id: string;
+}
+
+/**
+ * Every workspace's payments, newest first, with the collection and payer a
+ * platform admin needs in order to decide on a refund.
+ */
+export async function listPlatformTransactions(
+  query: ListPlatformTransactionsQuery,
+): Promise<PlatformTransactionRow[]> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      reference: transactions.reference,
+      status: transactions.status,
+      amount: transactions.amount,
+      currency: transactions.currency,
+      created_at: transactions.createdAt,
+      collection_name: collections.name,
+      payer_name: users.name,
+      payer_email: users.email,
+      merchant_id: transactions.merchantId,
+    })
+    .from(transactions)
+    .leftJoin(collections, eq(collections.id, transactions.collectionId))
+    .leftJoin(users, eq(users.id, transactions.customerId))
+    .where(
+      and(
+        query.status ? eq(transactions.status, query.status) : undefined,
+        query.merchant_id
+          ? eq(transactions.merchantId, query.merchant_id)
+          : undefined,
+      ),
+    )
+    .orderBy(desc(transactions.createdAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return rows;
+}
+
+export function listAuditLogs(query: ListAuditLogsQuery): Promise<AuditLog[]> {
+  return db
+    .select()
+    .from(auditLogs)
+    .where(
+      query.entity_type
+        ? eq(auditLogs.entityType, query.entity_type)
+        : query.action
+          ? eq(auditLogs.action, query.action)
+          : undefined,
+    )
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(query.limit);
 }
 
 async function loadMerchant(id: string): Promise<Merchant> {

@@ -1,6 +1,6 @@
 import {
-  bigint,
   integer,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -9,7 +9,7 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { users } from "./auth.js";
-import type { WithdrawalStatus } from "./enums.js";
+import { MONEY_PRECISION, type WithdrawalStatus } from "./enums.js";
 import { merchants } from "./merchants.js";
 import { payouts } from "./payouts.js";
 
@@ -25,7 +25,7 @@ export const withdrawals = pgTable(
     merchantId: text("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "restrict" }),
-    amount: bigint("amount", { mode: "number" }).notNull(),
+    amount: numeric("amount", MONEY_PRECISION).notNull(),
     currency: text("currency").notNull().default("NGN"),
     source: text("source").$type<"escrow" | "payouts">().notNull().default("escrow"),
     status: text("status")

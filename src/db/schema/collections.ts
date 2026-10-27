@@ -1,8 +1,8 @@
 import {
-  bigint,
   boolean,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -11,8 +11,39 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { users } from "./auth.js";
-import type { CollectionFieldType } from "./enums.js";
+import { MONEY_PRECISION, type CollectionFieldType } from "./enums.js";
 import { merchants } from "./merchants.js";
+
+/**
+ * A grouping a merchant owns — a school, a branch, a department, an event
+ * brand — so collections can be filed under it and share one logo. Payer pages
+ * and receipts show the group's name and logo instead of the merchant's, which
+ * is what lets one merchant collect for several organisations.
+ */
+export const collectionGroups = pgTable(
+  "collection_groups",
+  {
+    id: text("id").primaryKey(),
+    merchantId: text("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    logoUrl: text("logo_url"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("collection_groups_merchant_name_unique").on(
+      table.merchantId,
+      table.name,
+    ),
+  ],
+);
 
 export const collections = pgTable(
   "collections",
@@ -21,10 +52,13 @@ export const collections = pgTable(
     merchantId: text("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    groupId: text("group_id").references(() => collectionGroups.id, {
+      onDelete: "set null",
+    }),
     shortCode: text("short_code").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    amount: bigint("amount", { mode: "number" }).notNull(),
+    amount: numeric("amount", MONEY_PRECISION).notNull(),
     currency: text("currency").notNull().default("NGN"),
     coverImageUrl: text("cover_image_url"),
     isActive: boolean("is_active").notNull().default(true),
@@ -118,6 +152,8 @@ export const customerFields = pgTable(
   ],
 );
 
+export const insertCollectionGroupSchema = createInsertSchema(collectionGroups);
+export const selectCollectionGroupSchema = createSelectSchema(collectionGroups);
 export const insertCollectionSchema = createInsertSchema(collections);
 export const selectCollectionSchema = createSelectSchema(collections);
 export const insertCollectionFieldSchema = createInsertSchema(collectionFields);
@@ -129,6 +165,8 @@ export const selectTemplateFieldSchema = createSelectSchema(templateFields);
 export const insertCustomerFieldSchema = createInsertSchema(customerFields);
 export const selectCustomerFieldSchema = createSelectSchema(customerFields);
 
+export type NewCollectionGroup = z.infer<typeof insertCollectionGroupSchema>;
+export type CollectionGroup = z.infer<typeof selectCollectionGroupSchema>;
 export type NewCollection = z.infer<typeof insertCollectionSchema>;
 export type Collection = z.infer<typeof selectCollectionSchema>;
 export type NewCollectionField = z.infer<typeof insertCollectionFieldSchema>;

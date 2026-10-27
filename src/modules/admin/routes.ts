@@ -9,14 +9,21 @@ import {
 import { refundTransaction } from "../refunds/service.js";
 import {
   approveMerchantSchema,
+  listAuditLogsQuerySchema,
   listMerchantsQuerySchema,
+  listPlatformTransactionsQuerySchema,
   merchantIdParamSchema,
   rejectMerchantSchema,
   suspendMerchantSchema,
+  type ListAuditLogsQuery,
+  type ListPlatformTransactionsQuery,
 } from "./schemas.js";
 import {
   approveMerchant,
+  getAdminStats,
+  listAuditLogs,
   listMerchants,
+  listPlatformTransactions,
   rejectMerchant,
   suspendMerchant,
 } from "./service.js";
@@ -47,6 +54,44 @@ adminRouter.post(
 );
 
 adminRouter.use(requireAdmin);
+
+adminRouter.get("/stats", async (_req, res, next) => {
+  try {
+    res.json(await getAdminStats());
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get(
+  "/transactions",
+  validate(listPlatformTransactionsQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const transactions = await listPlatformTransactions(
+        req.query as unknown as ListPlatformTransactionsQuery,
+      );
+      res.json({ transactions });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+adminRouter.get(
+  "/audit-logs",
+  validate(listAuditLogsQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const logs = await listAuditLogs(
+        req.query as unknown as ListAuditLogsQuery,
+      );
+      res.json({ logs });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 adminRouter.get(
   "/merchants",

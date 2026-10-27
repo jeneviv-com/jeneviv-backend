@@ -1,6 +1,9 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { collections } from "../../db/schema/collections.js";
+import {
+  collectionGroups,
+  collections,
+} from "../../db/schema/collections.js";
 import { merchants } from "../../db/schema/merchants.js";
 import {
   transactionFields,
@@ -59,6 +62,14 @@ async function loadReceipt(reference: string): Promise<{
     where: (u, { eq: eqf }) => eqf(u.id, tx.customerId),
   });
 
+  // A grouped collection is issued under its group: that is whose name and logo
+  // the payer recognises, so the receipt carries them instead of the merchant's.
+  const group = collection?.groupId
+    ? ((await db.query.collectionGroups.findFirst({
+        where: eq(collectionGroups.id, collection.groupId),
+      })) ?? null)
+    : null;
+
   const studentField =
     fields.find((f) => /student|pupil|child|ward/i.test(`${f.fieldId} ${f.displayName}`)) ??
     fields.find((f) => /payer|full.?name|^name$/i.test(f.fieldId)) ??
@@ -71,8 +82,8 @@ async function loadReceipt(reference: string): Promise<{
 
   const receipt: PublicReceipt = {
     reference: tx.reference,
-    school_name: merchant.displayName ?? merchant.merchantCode,
-    logo_url: merchant.logoUrl,
+    school_name: group?.name ?? merchant.displayName ?? merchant.merchantCode,
+    logo_url: group?.logoUrl ?? merchant.logoUrl,
     student_name: studentField?.value ?? payer?.name ?? "Student",
     collection_name: collection?.name ?? "Payment",
     payer_name: payer?.name ?? "Payer",
@@ -83,7 +94,18 @@ async function loadReceipt(reference: string): Promise<{
     bank_verified: Boolean(merchant.bankVerifiedAt),
     verify_url: verifyUrl(tx.reference),
     receipt_url: `${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/api/verify/${encodeURIComponent(tx.reference)}/receipt.pdf`,
-    details: [{ label: "Collection", value: collection?.name ?? "Payment" }, ...details],
+    details: [
+      { label: "Collection", value: collection?.name ?? "Payment" },
+      ...(group
+        ? [
+            {
+              label: "Workspace",
+              value: merchant.displayName ?? merchant.merchantCode,
+            },
+          ]
+        : []),
+      ...details,
+    ],
   };
 
   return { tx, receipt };

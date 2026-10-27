@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 
 export interface ReceiptPdfData {
   reference: string;
@@ -22,11 +22,58 @@ const BRAND = rgb(0.94, 0.45, 0.12);
 const GREEN = rgb(0.09, 0.55, 0.34);
 const LINE = rgb(0.88, 0.89, 0.9);
 
-function money(amountMinor: number, currency: string): string {
-  return `${currency} ${(amountMinor / 100).toLocaleString("en-NG", {
+/*
+ * Amounts are stored in naira, not kobo: a ₦2,500 collection is 2500. Dividing
+ * by 100 here used to print every receipt at one hundredth of what was paid.
+ */
+function money(amount: number, currency: string): string {
+  return `${currency} ${Number(amount ?? 0).toLocaleString("en-NG", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/*
+ * The standard PDF fonts only encode WinAnsi. A payer field containing an emoji
+ * or any other non-WinAnsi character would make drawText throw, taking the whole
+ * receipt down, so unsupported characters are replaced instead.
+ */
+const WIN_ANSI_EXTRAS = new Set(
+  Array.from(
+    "\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178",
+  ),
+);
+
+function sanitize(text: string): string {
+  return Array.from(text.replace(/[\r\n\t]+/g, " "))
+    .map((char) => {
+      const code = char.codePointAt(0) ?? 32;
+      if ((code >= 32 && code <= 126) || (code >= 160 && code <= 255)) {
+        return char;
+      }
+      return WIN_ANSI_EXTRAS.has(char) ? char : "?";
+    })
+    .join("");
+}
+
+/** Trims a string with an ellipsis so it never runs off the page. */
+function fit(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+): string {
+  const clean = sanitize(text ?? "").trim();
+  if (!clean) return "";
+  if (font.widthOfTextAtSize(clean, size) <= maxWidth) return clean;
+  let out = clean;
+  while (
+    out.length > 0 &&
+    font.widthOfTextAtSize(`${out}\u2026`, size) > maxWidth
+  ) {
+    out = out.slice(0, -1);
+  }
+  return `${out.trimEnd()}\u2026`;
 }
 
 async function fetchImage(url: string): Promise<{
@@ -87,14 +134,15 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     }
   }
 
-  page.drawText(data.schoolName.slice(0, 60), {
+  const headingWidth = width - 96 - logoWidth;
+  page.drawText(fit(data.schoolName, bold, 22, headingWidth), {
     x: 48 + logoWidth,
     y: height - 118,
     size: 22,
     font: bold,
     color: INK,
   });
-  page.drawText(data.collectionName.slice(0, 70), {
+  page.drawText(fit(data.collectionName, regular, 11, headingWidth), {
     x: 48 + logoWidth,
     y: height - 138,
     size: 11,
@@ -135,17 +183,21 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     ),
   ];
 
+  const labelWidth = 130;
+  const valueX = 48 + 142;
+  const valueWidth = width - 48 - valueX;
+
   let y = height - 315;
   for (const [label, value] of rows) {
-    page.drawText(label.toUpperCase().slice(0, 28), {
+    page.drawText(fit(label.toUpperCase(), bold, 8, labelWidth), {
       x: 48,
       y,
       size: 8,
       font: bold,
       color: MUTED,
     });
-    page.drawText(value.slice(0, 72), {
-      x: 190,
+    page.drawText(fit(value, label === "Reference" ? mono : regular, 11, valueWidth), {
+      x: valueX,
       y,
       size: 11,
       font: label === "Reference" ? mono : regular,
@@ -213,7 +265,7 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     font: bold,
     color: MUTED,
   });
-  page.drawText(data.verifyUrl, {
+  page.drawText(fit(data.verifyUrl, regular, 9, width - 96), {
     x: 48,
     y: 43,
     size: 9,
@@ -221,7 +273,12 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     color: BRAND,
   });
   page.drawText(
-    "This receipt is issued electronically. Its validity can be checked at the URL above.",
+    fit(
+      "This receipt is issued electronically. Its validity can be checked at the URL above.",
+      regular,
+      7.5,
+      width - 96,
+    ),
     {
       x: 48,
       y: 24,
