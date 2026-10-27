@@ -306,7 +306,8 @@ export async function initPayment(
       narration,
       expirySeconds: env.VIRTUAL_ACCOUNT_EXPIRY_SECONDS,
       subaccountCode,
-      platformFeeMinor: toMinor(breakdown.platformFee, currency),
+      // Transaction charge = platform fee + Paystack fee (see adapter bearer: account).
+      platformFeeMinor: toMinor(breakdown.platformFee + breakdown.gatewayFee, currency),
     });
   } catch (err) {
     if (err instanceof GatewayError) {
