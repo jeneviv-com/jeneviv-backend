@@ -1,5 +1,5 @@
 import rateLimit from "express-rate-limit";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -19,7 +19,7 @@ function createLimiter(options: {
     ...(options.keyGenerator ? { validate: { keyGeneratorIpFallback: false } } : {}),
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (_req, res) => {
+    handler: (_req: Request, res: Response) => {
       res.status(429).json({
         error: {
           code: "rate_limited",

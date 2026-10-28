@@ -43,6 +43,20 @@
       "when": 1793028130232,
       "tag": "0005_brief_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793097508383,
+      "tag": "0006_spicy_blizzard",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793098552555,
+      "tag": "0007_redundant_next_avengers",
+      "breakpoints": true
     }
   ]
 }
