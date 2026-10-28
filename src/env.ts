@@ -112,9 +112,9 @@ export const env = {
     1200,
   ),
 
-  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
-  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ?? "",
-  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ?? "",
+  CLOUDINARY_CLOUD_NAME: (process.env.CLOUDINARY_CLOUD_NAME ?? "").trim(),
+  CLOUDINARY_API_KEY: (process.env.CLOUDINARY_API_KEY ?? "").trim(),
+  CLOUDINARY_API_SECRET: (process.env.CLOUDINARY_API_SECRET ?? "").trim(),
 
   RESEND_API_KEY: process.env.RESEND_API_KEY ?? "",
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL ?? "",

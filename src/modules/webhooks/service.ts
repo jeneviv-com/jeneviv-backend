@@ -14,6 +14,7 @@ import {
 import { getGateway } from "../../gateways/registry.js";
 import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
+import { sendReceiptEmail } from "../verify/notify.js";
 import { toMajor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import {
@@ -284,6 +285,12 @@ async function handleChargeSuccess(
       currency: tx.currency,
       settled_direct: !holdsFunds,
     },
+  });
+
+  await sendReceiptEmail({
+    reference: tx.reference,
+    transactionId: tx.id,
+    collectionId: tx.collectionId,
   });
 }
 

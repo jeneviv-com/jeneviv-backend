@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import type { User } from "../../db/schema/auth.js";
+import { users } from "../../db/schema/auth.js";
 import {
   collectionFields,
   collections,
@@ -197,6 +198,57 @@ async function ensureGatewayCustomerForMerchant(
   }
 }
 
+/**
+ * Gets or creates a guest user for anonymous payments.
+ * Guest users allow payments without account creation.
+ */
+async function getOrCreateGuestUser(): Promise<User> {
+  const guestEmail = "guest@payments.local";
+  
+  // Try to find existing guest user
+  const existing = await db.query.users.findFirst({
+    where: eq(users.email, guestEmail),
+  });
+  
+  if (existing) return existing;
+
+  // Create guest user
+  const guestId = `guest-${Date.now()}`;
+  try {
+    const [created] = await db
+      .insert(users)
+      .values({
+        id: guestId,
+        name: "Guest",
+        email: guestEmail,
+        emailVerified: true,
+        active: true,
+        role: "user",
+        methods: "email",
+        defaultCurrency: "NGN",
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (created) return created;
+    
+    // If conflict occurred, fetch the existing one
+    const retry = await db.query.users.findFirst({
+      where: eq(users.email, guestEmail),
+    });
+    
+    if (retry) return retry;
+  } catch (err) {
+    // Race condition: another request created the guest user
+    const retry = await db.query.users.findFirst({
+      where: eq(users.email, guestEmail),
+    });
+    if (retry) return retry;
+  }
+
+  throw new HttpError(500, "internal_error", "Failed to create guest user");
+}
+
 export interface InitPaymentResult {
   transaction: Transaction;
   payment_account: PaymentAccount;
@@ -210,9 +262,12 @@ export interface InitPaymentResult {
 }
 
 export async function initPayment(
-  user: User,
+  user: User | null,
   input: InitPaymentInput,
 ): Promise<InitPaymentResult> {
+  // Ensure we have a user - create a guest user if anonymous
+  const effectiveUser = user ?? await getOrCreateGuestUser();
+  
   const collection = await db.query.collections.findFirst({
     where: eq(collections.shortCode, input.collection_short_code),
   });
@@ -303,8 +358,8 @@ export async function initPayment(
     gateway.createVirtualAccount({
       reference,
       customerId,
-      customerEmail: user.email,
-      customerName: user.name,
+      customerEmail: effectiveUser.email,
+      customerName: effectiveUser.name,
       amount: toMinor(breakdown.total, currency),
       currency,
       narration,
@@ -376,7 +431,7 @@ export async function initPayment(
       .values({
         id: txId,
         reference,
-        customerId: user.id,
+        customerId: effectiveUser.id,
         merchantId: merchant.id,
         collectionId: collectionForResult.id,
         status: "pending",
@@ -409,7 +464,7 @@ export async function initPayment(
         .values(
           validatedValues.map((v) => ({
             id: newId(),
-            userId: user.id,
+            userId: effectiveUser.id,
             fieldId: v.fieldId,
             displayName: v.displayName,
             type: v.type,
@@ -433,7 +488,7 @@ export async function initPayment(
       .values({
         id: accountId,
         transactionId: txId,
-        forUserId: user.id,
+        forUserId: effectiveUser.id,
         gateway: gateway.name,
         gatewayAccountId: virtualAccount.gatewayAccountId,
         accountNumber: virtualAccount.accountNumber,
