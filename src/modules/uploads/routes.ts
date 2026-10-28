@@ -16,9 +16,10 @@ uploadsRouter.post(
     try {
       const { folder, resource_type } = req.body as {
         folder?: string;
-        resource_type: "image" | "raw" | "video" | "auto";
+        resource_type: "image" | "raw" | "video";
       };
       const params = signUpload({ folder, resourceType: resource_type });
+      res.setHeader("Cache-Control", "no-store");
       res.json(params);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith("Cloudinary")) {

@@ -9,7 +9,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import type { User } from "../../db/schema/auth.js";
+import { users, type User } from "../../db/schema/auth.js";
 import { collections } from "../../db/schema/collections.js";
 import type { TransactionStatus } from "../../db/schema/enums.js";
 import { merchants, type Merchant } from "../../db/schema/merchants.js";
@@ -119,14 +119,45 @@ export async function listTransactionsForMerchant(
   if (query.status) filters.push(eq(transactions.status, query.status));
 
   const rows = await db
-    .select()
+    .select({
+      transaction: transactions,
+      payerName: users.name,
+      payerEmail: users.email,
+      collectionName: collections.name,
+    })
     .from(transactions)
+    .leftJoin(users, eq(users.id, transactions.customerId))
+    .leftJoin(collections, eq(collections.id, transactions.collectionId))
     .where(and(...filters))
     .orderBy(desc(transactions.createdAt))
     .limit(query.limit)
     .offset(query.offset);
 
-  return { transactions: rows };
+  if (rows.length === 0) return { transactions: [] };
+
+  const fields = await db.query.transactionFields.findMany({
+    where: inArray(
+      transactionFields.transactionId,
+      rows.map((row) => row.transaction.id),
+    ),
+    orderBy: asc(transactionFields.fieldId),
+  });
+  const fieldsByTransaction = new Map<string, Record<string, string>>();
+  for (const field of fields) {
+    const values = fieldsByTransaction.get(field.transactionId) ?? {};
+    values[field.fieldId] = field.value;
+    fieldsByTransaction.set(field.transactionId, values);
+  }
+
+  return {
+    transactions: rows.map((row) => ({
+      ...row.transaction,
+      payer_name: row.payerName,
+      payer_email: row.payerEmail,
+      collection_name: row.collectionName,
+      field_values: fieldsByTransaction.get(row.transaction.id) ?? {},
+    })),
+  };
 }
 
 export async function reconcileTransactionsForMerchant(
@@ -135,6 +166,41 @@ export async function reconcileTransactionsForMerchant(
   reconciled: boolean,
 ): Promise<{ transactions: Transaction[] }> {
   const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length !== ids.length) {
+    throw new HttpError(422, "duplicate_transaction_ids", "Each transaction may be selected only once");
+  }
+
+  const ownedRows = await db
+    .select({ id: transactions.id, status: transactions.status })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.id, uniqueIds),
+        eq(transactions.merchantId, merchant.id),
+      ),
+    );
+  const ownedIds = new Set(ownedRows.map((row) => row.id));
+  const missing = uniqueIds.filter((id) => !ownedIds.has(id));
+  if (missing.length > 0) {
+    throw new HttpError(
+      404,
+      "not_found",
+      "One or more transactions not found",
+      { missing },
+    );
+  }
+
+  const unavailable = ownedRows
+    .filter((row) => row.status !== "success")
+    .map((row) => row.id);
+  if (unavailable.length > 0) {
+    throw new HttpError(
+      409,
+      "transaction_not_reconcilable",
+      "Only confirmed successful transactions can be reconciled",
+      { ids: unavailable },
+    );
+  }
 
   const updated = await db
     .update(transactions)

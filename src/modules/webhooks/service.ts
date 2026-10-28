@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { merchants } from "../../db/schema/merchants.js";
 import { webhookEvents } from "../../db/schema/platform.js";
@@ -237,19 +237,25 @@ async function handleChargeSuccess(
         status: "success",
         paidAt: event.paidAt,
         gatewayId: event.gatewayId,
-        updatedAt: new Date(),          ...(holdsFunds
-            ? {
-                // Normalized events report gateway fees in minor units;
-                // transactions are stored in naira.
-                gatewayFee: toMajor(event.gatewayFee, event.currency),
-                totalCharged:
-                  tx.totalCharged -
-                  tx.gatewayFee +
-                  toMajor(event.gatewayFee, event.currency),
-              }
-            : { settledAt: event.paidAt }),
+        updatedAt: new Date(),
+        ...(holdsFunds
+          ? {
+              // Normalized events report gateway fees in minor units;
+              // transactions are stored in naira.
+              gatewayFee: toMajor(event.gatewayFee, event.currency),
+              totalCharged:
+                tx.totalCharged -
+                tx.gatewayFee +
+                toMajor(event.gatewayFee, event.currency),
+            }
+          : { settledAt: event.paidAt }),
       })
-      .where(eq(transactions.id, tx.id))
+      .where(
+        and(
+          eq(transactions.id, tx.id),
+          eq(transactions.status, "pending"),
+        ),
+      )
       .returning({ id: transactions.id });
     if (updateRes.length === 0) return;
 
@@ -297,7 +303,12 @@ async function handleChargeFailed(
       gatewayId: event.gatewayId,
       updatedAt: new Date(),
     })
-    .where(eq(transactions.id, tx.id));
+    .where(
+      and(
+        eq(transactions.id, tx.id),
+        eq(transactions.status, "pending"),
+      ),
+    );
 
   await recordAudit({
     actorUid: null,

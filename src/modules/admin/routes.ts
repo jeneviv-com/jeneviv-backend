@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { rateLimiter } from "../../middleware/rate-limit.js";
 import { requireAdmin } from "../../middleware/require-admin.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -110,6 +111,7 @@ adminRouter.get(
 
 adminRouter.post(
   "/merchants/:id/approve",
+  rateLimiter.approvalLimiter,
   validate(merchantIdParamSchema, "params"),
   validate(approveMerchantSchema),
   async (req, res, next) => {
@@ -129,6 +131,7 @@ adminRouter.post(
 
 adminRouter.post(
   "/merchants/:id/reject",
+  rateLimiter.approvalLimiter,
   validate(merchantIdParamSchema, "params"),
   validate(rejectMerchantSchema),
   async (req, res, next) => {

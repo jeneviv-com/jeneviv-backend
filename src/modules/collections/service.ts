@@ -16,6 +16,7 @@ import {
 } from "../../db/schema/merchants.js";
 import { transactions } from "../../db/schema/transactions.js";
 import { newId, newShortCode } from "../../lib/short-code.js";
+import { isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
 import { HttpError } from "../../middleware/error.js";
 import type { FieldInput } from "../templates/schemas.js";
 import type {
@@ -179,6 +180,18 @@ export async function createCollection(
     await ensureGroupUsable(merchant, input.group_id);
   }
 
+  if (
+    input.cover_image_url !== undefined &&
+    input.cover_image_url !== null &&
+    !isCloudinaryUrlOnOurCloud(input.cover_image_url)
+  ) {
+    throw new HttpError(
+      422,
+      "invalid_cover_image_url",
+      "Upload the cover image with POST /api/uploads/sign — the URL must be on our Cloudinary cloud.",
+    );
+  }
+
   const id = newId();
   const shortCode = await generateUniqueShortCode();
 
@@ -319,6 +332,16 @@ export async function updateCollection(
   if (input.amount !== undefined) patch.amount = input.amount;
   if (input.currency !== undefined) patch.currency = input.currency;
   if (input.cover_image_url !== undefined) {
+    if (
+      input.cover_image_url !== null &&
+      !isCloudinaryUrlOnOurCloud(input.cover_image_url)
+    ) {
+      throw new HttpError(
+        422,
+        "invalid_cover_image_url",
+        "Upload the cover image with POST /api/uploads/sign — the URL must be on our Cloudinary cloud.",
+      );
+    }
     patch.coverImageUrl = input.cover_image_url;
   }
   if (input.is_active !== undefined) patch.isActive = input.is_active;

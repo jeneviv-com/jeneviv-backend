@@ -9,6 +9,6 @@ export const signUploadSchema = z.object({
         "folder may contain letters, digits, _, -, / and must start with a letter or digit",
     })
     .optional(),
-  resource_type: z.enum(["image", "raw", "video", "auto"]).default("auto"),
+  resource_type: z.enum(["image", "raw", "video"]).default("image"),
 });
 export type SignUploadInput = z.infer<typeof signUploadSchema>;

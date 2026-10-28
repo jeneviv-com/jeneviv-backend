@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { rateLimiter } from "../../middleware/rate-limit.js";
 import { validate } from "../../middleware/validate.js";
 import {
   approvalTokenParamSchema,
@@ -34,6 +35,7 @@ approvalsRouter.get(
 
 approvalsRouter.post(
   "/:token/approve",
+  rateLimiter.approvalLimiter,
   validate(approvalTokenParamSchema, "params"),
   validate(approveWithdrawalSchema),
   async (req, res, next) => {

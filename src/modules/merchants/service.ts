@@ -9,6 +9,7 @@ import {
 import { getDefaultGateway } from "../../gateways/registry.js";
 import { GatewayError } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
+import { isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
 import { newId, newMerchantCode } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import type {
@@ -135,7 +136,16 @@ export async function updateMerchantSettings(
   const patch: Partial<typeof merchants.$inferInsert> = {};
   let bankToRepoint: MerchantBankAccount | undefined;
   if (input.display_name !== undefined) patch.displayName = input.display_name;
-  if (input.logo_url !== undefined) patch.logoUrl = input.logo_url;
+  if (input.logo_url !== undefined) {
+    if (input.logo_url !== null && !isCloudinaryUrlOnOurCloud(input.logo_url)) {
+      throw new HttpError(
+        422,
+        "invalid_logo_url",
+        "Upload the logo with POST /api/uploads/sign — the URL must be an image on our Cloudinary cloud.",
+      );
+    }
+    patch.logoUrl = input.logo_url;
+  }
   if (input.payout_mode !== undefined) patch.payoutMode = input.payout_mode;
   if (input.email_notification_for_transactions !== undefined) {
     patch.emailNotificationForTransactions =

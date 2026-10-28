@@ -9,6 +9,7 @@ import { env } from "../../env.js";
 import { monnifyAdapter } from "../../gateways/monnify/adapter.js";
 import { monnifyConfigured } from "../../gateways/monnify/client.js";
 import { getDefaultGateway } from "../../gateways/registry.js";
+import { directSettlementActive } from "../payouts/service.js";
 import { GatewayError } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
 import { newOpaqueToken, newOtp, hashSecret, secretMatches } from "../../lib/secrets.js";
@@ -132,6 +133,13 @@ export async function createWithdrawal(
       "Withdrawals unlock after your NIN and settlement bank account are verified.",
     );
   }
+  if (directSettlementActive()) {
+    throw new HttpError(
+      400,
+      "withdrawals_unavailable",
+      "Sweeps are not available while the gateway settles payments directly to your bank.",
+    );
+  }
   if (!merchant.treasurerName || !merchant.treasurerPhone) {
     throw new HttpError(
       422,
@@ -140,7 +148,9 @@ export async function createWithdrawal(
     );
   }
 
-  const source: "escrow" | "payouts" = merchant.escrowEnabled ? "escrow" : "payouts";
+  const source: "escrow" | "payouts" = merchant.escrowEnabled
+    ? "escrow"
+    : "payouts";
   const available =
     source === "escrow" ? merchant.walletBalanceNgn : merchant.payoutsBalanceNgn;
   if (input.currency !== "NGN") {
@@ -150,7 +160,7 @@ export async function createWithdrawal(
     throw new HttpError(
       422,
       "insufficient_balance",
-      `Only ${(available / 100).toLocaleString("en-NG", { style: "currency", currency: "NGN" })} is available to sweep.`,
+      `Only ${available.toLocaleString("en-NG", { style: "currency", currency: "NGN" })} is available to sweep.`,
     );
   }
 
@@ -201,7 +211,7 @@ export async function createWithdrawal(
 
   const sms = await sendSms(
     merchant.treasurerPhone,
-    `${merchant.displayName ?? "Jeneviv"} sweep of NGN ${(input.amount / 100).toLocaleString("en-NG")} needs your approval. ${link} Code: ${otp}`,
+    `${merchant.displayName ?? "Jeneviv"} sweep of NGN ${input.amount.toLocaleString("en-NG")} needs your approval. ${link} Code: ${otp}`,
   );
   if (!sms.delivered) {
     await db.delete(withdrawals).where(eq(withdrawals.id, id));
@@ -626,11 +636,13 @@ export async function markWithdrawalCompletedByRef(
   const row = await db.query.withdrawals.findFirst({
     where: eq(withdrawals.gatewayRef, reference),
   });
-  if (!row || row.status === "success") return;
-  await db
+  if (!row || row.status !== "processing") return;
+  const [updated] = await db
     .update(withdrawals)
     .set({ status: "success", updatedAt: new Date() })
-    .where(and(eq(withdrawals.id, row.id), inArray(withdrawals.status, ["processing"])));
+    .where(and(eq(withdrawals.id, row.id), eq(withdrawals.status, "processing")))
+    .returning({ id: withdrawals.id });
+  if (!updated) return;
   await recordAudit({
     actorUid: null,
     action: "withdrawal.disbursed",
@@ -647,11 +659,13 @@ export async function markWithdrawalFailedByRef(
   const row = await db.query.withdrawals.findFirst({
     where: eq(withdrawals.gatewayRef, reference),
   });
-  if (!row || row.status === "failed" || row.status === "success") return;
-  await db
+  if (!row || row.status !== "processing") return;
+  const [updated] = await db
     .update(withdrawals)
     .set({ status: "failed", failureReason: reason, updatedAt: new Date() })
-    .where(and(eq(withdrawals.id, row.id), inArray(withdrawals.status, ["processing"])));
+    .where(and(eq(withdrawals.id, row.id), eq(withdrawals.status, "processing")))
+    .returning({ id: withdrawals.id });
+  if (!updated) return;
   await credit(row.merchantId, row.source as "escrow" | "payouts", row.amount);
   await recordAudit({
     actorUid: null,

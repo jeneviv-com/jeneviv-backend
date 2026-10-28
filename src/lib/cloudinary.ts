@@ -5,7 +5,7 @@ export interface SignUploadArgs {
   /** Optional Cloudinary folder. Restricted to a safe charset to avoid path tricks. */
   folder?: string;
   /** Cloudinary resource type. */
-  resourceType?: "image" | "raw" | "video" | "auto";
+  resourceType?: "image" | "raw" | "video";
 }
 
 export interface SignedUploadParams {
@@ -13,7 +13,7 @@ export interface SignedUploadParams {
   api_key: string;
   timestamp: number;
   signature: string;
-  resource_type: "image" | "raw" | "video" | "auto";
+  resource_type: "image" | "raw" | "video";
   upload_url: string;
   folder?: string;
 }
@@ -50,7 +50,7 @@ function sign(params: Record<string, string | number>, apiSecret: string): strin
 
 export function signUpload(args: SignUploadArgs): SignedUploadParams {
   const { cloudName, apiKey, apiSecret } = ensureConfigured();
-  const resourceType = args.resourceType ?? "auto";
+  const resourceType = args.resourceType ?? "image";
 
   if (args.folder !== undefined && !FOLDER_RE.test(args.folder)) {
     throw new Error("Invalid folder name");
@@ -89,9 +89,18 @@ export function isCloudinaryUrlOnOurCloud(url: string): boolean {
     return false;
   }
   if (parsed.protocol !== "https:") return false;
+  if (parsed.username || parsed.password || parsed.port) return false;
   const host = parsed.hostname.toLowerCase();
-  if (host === "res.cloudinary.com") {
-    return parsed.pathname.startsWith(`/${cloud.toLowerCase()}/`);
+  const cloudName = cloud.toLowerCase();
+  if (host !== "res.cloudinary.com") return false;
+
+  const segments = parsed.pathname.split("/").filter(Boolean);
+  if (segments[0]?.toLowerCase() !== cloudName || segments.length < 3) {
+    return false;
   }
-  return false;
+  const resourceType = segments[1];
+  if (resourceType !== "image" && resourceType !== "raw" && resourceType !== "video") {
+    return false;
+  }
+  return segments.length >= 3;
 }

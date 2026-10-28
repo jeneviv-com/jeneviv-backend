@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { merchants } from "../db/schema/merchants.js";
 import { transactions } from "../db/schema/transactions.js";
@@ -22,7 +22,6 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
       merchantId: transactions.merchantId,
       amount: transactions.amount,
       currency: transactions.currency,
-      escrowEnabled: merchants.escrowEnabled,
     })
     .from(transactions)
     .innerJoin(merchants, eq(merchants.id, transactions.merchantId))
@@ -31,12 +30,12 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
         eq(transactions.status, "success"),
         isNull(transactions.settledAt),
         lt(transactions.paidAt, cutoff),
+        eq(merchants.escrowEnabled, false),
       ),
-    );
+    )
+    .orderBy(asc(transactions.paidAt), asc(transactions.createdAt));
 
-  // Escrow workspaces keep funds in the wallet until a treasurer-approved
-  // sweep, so they are deliberately excluded from the T+1 promotion.
-  const promotable = eligible.filter((row) => !row.escrowEnabled);
+  const promotable = eligible;
   if (promotable.length === 0) return { settled: 0, total_amount_ngn: 0 };
 
   const now = new Date();
@@ -47,23 +46,47 @@ export async function runSettleWallet(): Promise<SettleWalletResult> {
     for (const row of promotable) {
       if (row.currency !== "NGN") continue;
 
+      const debited = await tx
+        .update(merchants)
+        .set({
+          walletBalanceNgn: sql`${merchants.walletBalanceNgn} - ${row.amount}`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(merchants.id, row.merchantId),
+            gte(merchants.walletBalanceNgn, row.amount),
+          ),
+        )
+        .returning({ id: merchants.id });
+      if (debited.length === 0) continue;
+
       const updated = await tx
         .update(transactions)
         .set({ settledAt: now, updatedAt: now })
         .where(
           and(
             eq(transactions.id, row.id),
+            eq(transactions.status, "success"),
             isNull(transactions.settledAt),
           ),
         )
         .returning({ id: transactions.id });
 
-      if (updated.length === 0) continue;
+      if (updated.length === 0) {
+        await tx
+          .update(merchants)
+          .set({
+            walletBalanceNgn: sql`${merchants.walletBalanceNgn} + ${row.amount}`,
+            updatedAt: now,
+          })
+          .where(eq(merchants.id, row.merchantId));
+        continue;
+      }
 
       await tx
         .update(merchants)
         .set({
-          walletBalanceNgn: sql`${merchants.walletBalanceNgn} - ${row.amount}`,
           payoutsBalanceNgn: sql`${merchants.payoutsBalanceNgn} + ${row.amount}`,
           updatedAt: now,
         })

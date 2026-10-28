@@ -11,19 +11,13 @@ export interface JobDefinition {
   run: () => Promise<unknown>;
 }
 
-export const jobs: Record<string, JobDefinition> = {
+const payoutJobs: Record<string, JobDefinition> = {
   "settle-wallet": {
     name: "settle-wallet",
     description:
       "Promote successful transactions older than 24h from wallet_balance to payouts_balance.",
     cron: "0 2 * * *",
     run: () => runSettleWallet(),
-  },
-  "refresh-banks": {
-    name: "refresh-banks",
-    description: "Refresh cached bank_codes from the default gateway.",
-    cron: "0 3 * * *",
-    run: () => runRefreshBanks(),
   },
   "scheduled-payouts-daily": {
     name: "scheduled-payouts-daily",
@@ -39,16 +33,32 @@ export const jobs: Record<string, JobDefinition> = {
     cron: "0 4 * * MON",
     run: () => runScheduledPayouts("auto_weekly"),
   },
-  "notification-batcher": {
-    name: "notification-batcher",
-    description:
-      "Flush queued merchant email notifications per email_notification_period (Phase 10).",
-    cron: "*/15 * * * *",
-    run: () => runNotificationBatcher(),
-  },
 };
 
-export function listJobs(): Array<Pick<JobDefinition, "name" | "description" | "cron">> {
+export function getJobs(defaultGatewayName: string): Record<string, JobDefinition> {
+  const sharedJobs: Record<string, JobDefinition> = {
+    "refresh-banks": {
+      name: "refresh-banks",
+      description: "Refresh cached bank_codes from the default gateway.",
+      cron: "0 3 * * *",
+      run: () => runRefreshBanks(),
+    },
+    "notification-batcher": {
+      name: "notification-batcher",
+      description:
+        "Flush queued merchant email notifications per email_notification_period (Phase 10).",
+      cron: "*/15 * * * *",
+      run: () => runNotificationBatcher(),
+    },
+  };
+  return defaultGatewayName === "paystack"
+    ? sharedJobs
+    : { ...sharedJobs, ...payoutJobs };
+}
+
+export const jobs = getJobs(process.env.DEFAULT_GATEWAY ?? "flutterwave");
+
+export function listJobs(): Array<{name: string; description: string; cron: string}> {
   return Object.values(jobs).map(({ name, description, cron }) => ({
     name,
     description,
