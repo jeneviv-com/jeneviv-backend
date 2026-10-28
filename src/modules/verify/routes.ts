@@ -22,7 +22,7 @@ verifyRouter.get(
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
-        `inline; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+        `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
       );
       res.setHeader("Cache-Control", "private, max-age=60");
       res.send(Buffer.from(bytes));

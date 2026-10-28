@@ -83,7 +83,7 @@ async function loadReceipt(reference: string): Promise<{
   const receipt: PublicReceipt = {
     reference: tx.reference,
     school_name: group?.name ?? merchant.displayName ?? merchant.merchantCode,
-    logo_url: group?.logoUrl ?? merchant.logoUrl,
+    logo_url: group ? group.logoUrl : merchant.logoUrl,
     student_name: studentField?.value ?? payer?.name ?? "Student",
     collection_name: collection?.name ?? "Payment",
     payer_name: payer?.name ?? "Payer",

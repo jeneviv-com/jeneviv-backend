@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 
 export interface ReceiptPdfData {
@@ -74,6 +76,17 @@ function fit(
     out = out.slice(0, -1);
   }
   return `${out.trimEnd()}\u2026`;
+}
+
+async function embedJenevivLogo(pdf: PDFDocument) {
+  try {
+    const bytes = await readFile(
+      resolve(process.cwd(), "public/assets/images/jeneviv.png"),
+    );
+    return await pdf.embedPng(bytes);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchImage(url: string): Promise<{
@@ -253,21 +266,21 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
 
   page.drawRectangle({
     x: 48,
-    y: 80,
+    y: 92,
     width: width - 96,
     height: 1,
     color: LINE,
   });
   page.drawText("Verify this receipt", {
     x: 48,
-    y: 58,
+    y: 72,
     size: 9,
     font: bold,
     color: MUTED,
   });
   page.drawText(fit(data.verifyUrl, regular, 9, width - 96), {
     x: 48,
-    y: 43,
+    y: 56,
     size: 9,
     font: regular,
     color: BRAND,
@@ -281,12 +294,30 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     ),
     {
       x: 48,
-      y: 24,
+      y: 39,
       size: 7.5,
       font: regular,
       color: MUTED,
     },
   );
+
+  const jenevivLogo = await embedJenevivLogo(pdf);
+  if (jenevivLogo) {
+    const scale = Math.min(20 / jenevivLogo.width, 20 / jenevivLogo.height);
+    page.drawImage(jenevivLogo, {
+      x: 48,
+      y: 12,
+      width: jenevivLogo.width * scale,
+      height: jenevivLogo.height * scale,
+    });
+  }
+  page.drawText("Powered by Jeneviv", {
+    x: 74,
+    y: 19,
+    size: 8.5,
+    font: bold,
+    color: MUTED,
+  });
 
   return pdf.save();
 }
