@@ -104,3 +104,52 @@ export function isCloudinaryUrlOnOurCloud(url: string): boolean {
   }
   return segments.length >= 3;
 }
+
+/**
+ * Cloudinary public id for a delivery URL on our cloud, without the extension:
+ * https://res.cloudinary.com/<cloud>/image/upload/v123/jeneviv/groups/abc.png -> jeneviv/groups/abc
+ */
+export function publicIdFromUrl(url: string): string | null {
+  if (!isCloudinaryUrlOnOurCloud(url)) return null;
+  const match = new URL(url).pathname.match(/^\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+)$/);
+  if (!match) return null;
+  const publicId = match[1].replace(/\.[a-zA-Z0-9]+$/, "");
+  return publicId || null;
+}
+
+/**
+ * Best-effort delete of a logo we uploaded. Never throws: a failed cleanup must
+ * not block a save. Failures are logged so they can be removed by hand later.
+ */
+export async function destroyLogo(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const publicId = publicIdFromUrl(url);
+  if (!publicId) return;
+  try {
+    const { cloudName, apiKey, apiSecret } = ensureConfigured();
+    const timestamp = Math.floor(Date.now() / 1000);
+    // Cloudinary signature: sha1 of the sorted params followed by the API secret.
+    const signature = createHash("sha1")
+      .update(`public_id=${publicId}&timestamp=${timestamp}${apiSecret}`)
+      .digest("hex");
+    const form = new URLSearchParams({
+      public_id: publicId,
+      timestamp: String(timestamp),
+      api_key: apiKey,
+      signature,
+    });
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+      method: "POST",
+      body: form,
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      result?: string;
+      error?: { message?: string };
+    };
+    if (!res.ok || (body.result !== "ok" && body.result !== "not found")) {
+      console.error(`[cloudinary] destroy ${publicId} failed:`, body.error?.message ?? res.status);
+    }
+  } catch (err) {
+    console.error(`[cloudinary] destroy ${publicId} threw:`, err);
+  }
+}

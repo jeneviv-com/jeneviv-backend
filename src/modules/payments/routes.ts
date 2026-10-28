@@ -3,9 +3,19 @@ import { rateLimiter } from "../../middleware/rate-limit.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validate } from "../../middleware/validate.js";
 import { initPaymentSchema } from "./schemas.js";
-import { initPayment } from "./service.js";
+import { getPublicPaymentStatus, initPayment } from "./service.js";
 
 export const paymentsRouter = Router();
+
+// Public: a payer checks their own payment by reference while they wait.
+// Returns status only, never payer details.
+paymentsRouter.get("/status/:reference", async (req, res, next) => {
+  try {
+    res.json(await getPublicPaymentStatus(req.params.reference));
+  } catch (err) {
+    next(err);
+  }
+});
 
 paymentsRouter.use(requireAuth);
 

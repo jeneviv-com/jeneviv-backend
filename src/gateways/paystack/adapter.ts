@@ -1,4 +1,5 @@
 import type {
+  VerifiedPayment,
   BankSummary,
   CreateVirtualAccountArgs,
   CreateVirtualAccountResult,
@@ -309,5 +310,32 @@ export const paystackAdapter: PaymentGateway = {
 
   parseWebhookEvent(payload: unknown): NormalizedEvent | null {
     return parsePaystackEvent(payload);
+  },
+  async verifyPayment(reference: string): Promise<VerifiedPayment | null> {
+    const res = await psRequest<
+      PsEnvelope<{
+        id: number;
+        status: string;
+        amount: number;
+        fees: number | null;
+        currency: string;
+        paid_at: string | null;
+      }>
+    >({
+      method: "GET",
+      path: `/transaction/verify/${encodeURIComponent(reference)}`,
+    });
+    const d = res.data?.data;
+    if (!d) return null;
+    const status: VerifiedPayment["status"] =
+      d.status === "success" ? "success" : d.status === "failed" ? "failed" : "pending";
+    return {
+      status,
+      gatewayId: String(d.id),
+      amountPaidMinor: d.amount,
+      gatewayFeeMinor: d.fees ?? 0,
+      currency: d.currency,
+      paidAt: d.paid_at ? new Date(d.paid_at) : null,
+    };
   },
 };

@@ -9,7 +9,11 @@ import {
   type CollectionField,
 } from "../../db/schema/collections.js";
 import type { CollectionFieldType } from "../../db/schema/enums.js";
-import { merchants, type Merchant } from "../../db/schema/merchants.js";
+import {
+  merchantBankAccounts,
+  merchants,
+  type Merchant,
+} from "../../db/schema/merchants.js";
 import {
   paymentAccounts,
   transactionFields,
@@ -25,6 +29,7 @@ import { computeCharge } from "../../lib/fees.js";
 import { toMajor, toMinor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
+import { ensureMerchantSubaccount } from "../merchants/service.js";
 import type { InitPaymentInput } from "./schemas.js";
 
 const REFERENCE_ALPHABET =
@@ -294,9 +299,8 @@ export async function initPayment(
     100,
   );
 
-  let virtualAccount;
-  try {
-    virtualAccount = await gateway.createVirtualAccount({
+  const createVirtual = (code: string | undefined) =>
+    gateway.createVirtualAccount({
       reference,
       customerId,
       customerEmail: user.email,
@@ -305,18 +309,51 @@ export async function initPayment(
       currency,
       narration,
       expirySeconds: env.VIRTUAL_ACCOUNT_EXPIRY_SECONDS,
-      subaccountCode,
+      subaccountCode: code,
       platformFeeMinor: toMinor(breakdown.platformFee, currency),
     });
+
+  let virtualAccount;
+  try {
+    virtualAccount = await createVirtual(subaccountCode);
   } catch (err) {
-    if (err instanceof GatewayError) {
+    const staleSubaccount =
+      err instanceof GatewayError && /invalid subaccount/i.test(err.message);
+    if (!staleSubaccount || !gateway.ensureSubaccount) {
+      if (err instanceof GatewayError) {
+        throw new HttpError(
+          502,
+          "gateway_error",
+          `Failed to create virtual account: ${err.message}`,
+        );
+      }
+      throw err;
+    }
+
+    // The stored subaccount no longer exists on this gateway account (the key or
+    // environment changed, or it was closed). Rebuild it from the default bank
+    // account, then retry once.
+    const [bank] = merchant.defaultBankAccountId
+      ? await db
+          .select()
+          .from(merchantBankAccounts)
+          .where(eq(merchantBankAccounts.id, merchant.defaultBankAccountId))
+          .limit(1)
+      : [];
+    if (!bank) {
       throw new HttpError(
-        502,
-        "gateway_error",
-        `Failed to create virtual account: ${err.message}`,
+        403,
+        "merchant_not_onboarded",
+        "Add a verified bank account before collecting payments",
       );
     }
-    throw err;
+
+    await ensureMerchantSubaccount(merchant, bank, true);
+    const refreshed = await db.query.merchants.findFirst({
+      where: eq(merchants.id, merchant.id),
+    });
+    subaccountCode = refreshed?.gatewaySubaccountIds?.[gateway.name] ?? undefined;
+    virtualAccount = await createVirtual(subaccountCode);
   }
 
   // Split gateways (Paystack) gross up the customer charge to cover their fee,
@@ -423,4 +460,24 @@ export async function initPayment(
       },
     };
   });
+}
+
+/**
+ * What a payer's browser may see about one payment. No payer details, no
+ * internal ids: just enough to show whether the transfer has been confirmed.
+ */
+export async function getPublicPaymentStatus(reference: string) {
+  const tx = await db.query.transactions.findFirst({
+    where: eq(transactions.reference, reference),
+  });
+  if (!tx) {
+    throw new HttpError(404, "not_found", "Payment not found");
+  }
+  return {
+    reference: tx.reference,
+    status: tx.status,
+    amount: tx.amount,
+    currency: tx.currency,
+    paid_at: tx.paidAt ? tx.paidAt.toISOString() : null,
+  };
 }

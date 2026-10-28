@@ -1,4 +1,5 @@
 import { runNotificationBatcher } from "./notification-batcher.js";
+import { runReconcilePending } from "./reconcile-pending.js";
 import { runRefreshBanks } from "./refresh-banks.js";
 import { runScheduledPayouts } from "./scheduled-payouts.js";
 import { runSettleWallet } from "./settle-wallet.js";
@@ -42,6 +43,13 @@ export function getJobs(defaultGatewayName: string): Record<string, JobDefinitio
       description: "Refresh cached bank_codes from the default gateway.",
       cron: "0 3 * * *",
       run: () => runRefreshBanks(),
+    },
+    "reconcile-pending": {
+      name: "reconcile-pending",
+      description:
+        "Check old pending payments with the gateway and record any that were paid but whose webhook never arrived.",
+      cron: "*/10 * * * *",
+      run: () => runReconcilePending(),
     },
     "notification-batcher": {
       name: "notification-batcher",

@@ -185,6 +185,12 @@ export interface PaymentGateway {
    */
   retryRefund?(args: RetryRefundArgs): Promise<InitiateRefundResult>;
 
+  /**
+   * Asks the gateway for the current state of a payment. Used by the
+   * reconciliation job to catch payments whose webhook never arrived.
+   */
+  verifyPayment?(reference: string): Promise<VerifiedPayment | null>;
+
   verifyWebhookSignature(
     rawBody: Buffer,
     headers: Record<string, string | string[] | undefined>,
@@ -211,4 +217,15 @@ export class GatewayError extends Error {
       (this as Error & { cause?: unknown }).cause = options.cause;
     }
   }
+}
+
+export interface VerifiedPayment {
+  status: "pending" | "success" | "failed";
+  gatewayId: string;
+  /** Amount the gateway received, in minor units. */
+  amountPaidMinor: number;
+  /** Gateway fee, in minor units. */
+  gatewayFeeMinor: number;
+  currency: string;
+  paidAt: Date | null;
 }

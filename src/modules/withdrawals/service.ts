@@ -126,6 +126,13 @@ export async function createWithdrawal(
   user: User,
   input: CreateWithdrawalInput,
 ): Promise<{ withdrawal: WithdrawalView; approval_link?: string; dev_otp?: string }> {
+  if (!merchant.escrowEnabled) {
+    throw new HttpError(
+      403,
+      "escrow_disabled",
+      "Escrow withdrawals are not enabled for this workspace",
+    );
+  }
   if (!merchant.canWithdraw) {
     throw new HttpError(
       403,

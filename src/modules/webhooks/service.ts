@@ -318,3 +318,27 @@ async function handleChargeFailed(
     metadata: { reference: event.reference, reason: event.reason },
   });
 }
+
+/**
+ * Records a payment that reconciliation confirmed with the gateway. Goes through
+ * the same handler as a webhook, so it is idempotent and updates the same rows.
+ */
+export async function applyVerifiedCharge(args: {
+  reference: string;
+  gatewayId: string;
+  amountPaidMinor: number;
+  gatewayFeeMinor: number;
+  currency: string;
+  paidAt: Date;
+}): Promise<void> {
+  await handleChargeSuccess({
+    type: "charge.success",
+    gatewayId: args.gatewayId,
+    reference: args.reference,
+    amountPaid: args.amountPaidMinor,
+    gatewayFee: args.gatewayFeeMinor,
+    currency: args.currency,
+    paidAt: args.paidAt,
+    raw: null,
+  });
+}

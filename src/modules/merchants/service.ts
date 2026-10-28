@@ -9,7 +9,7 @@ import {
 import { getDefaultGateway } from "../../gateways/registry.js";
 import { GatewayError } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
-import { isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
+import { destroyLogo, isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
 import { newId, newMerchantCode } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import type {
@@ -136,6 +136,7 @@ export async function updateMerchantSettings(
   const patch: Partial<typeof merchants.$inferInsert> = {};
   let bankToRepoint: MerchantBankAccount | undefined;
   if (input.display_name !== undefined) patch.displayName = input.display_name;
+  const oldLogo = merchant.logoUrl ?? null;
   if (input.logo_url !== undefined) {
     if (input.logo_url !== null && !isCloudinaryUrlOnOurCloud(input.logo_url)) {
       throw new HttpError(
@@ -187,6 +188,11 @@ export async function updateMerchantSettings(
 
   if (!updated) {
     throw new HttpError(500, "internal_error", "Failed to update merchant");
+  }
+
+  // Remove the previous logo from Cloudinary once it has been replaced.
+  if (input.logo_url !== undefined && oldLogo && oldLogo !== updated.logoUrl) {
+    await destroyLogo(oldLogo);
   }
 
   if (bankToRepoint) {

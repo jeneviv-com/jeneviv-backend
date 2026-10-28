@@ -6,7 +6,7 @@ import {
   type CollectionGroup,
 } from "../../db/schema/collections.js";
 import type { Merchant } from "../../db/schema/merchants.js";
-import { isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
+import { destroyLogo, isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
 import { newId } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import type {
@@ -69,6 +69,14 @@ export async function getGroup(
   return group;
 }
 
+/** Maps a database unique-violation on the group name to the same 409 the pre-check returns. */
+function mapGroupConflict(err: unknown): never {
+  if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") {
+    throw new HttpError(409, "group_name_taken", "You already have a group with that name");
+  }
+  throw err;
+}
+
 export async function createGroup(
   merchant: Merchant,
   input: CreateGroupInput,
@@ -96,7 +104,8 @@ export async function createGroup(
       description: input.description ?? null,
       logoUrl: assertOwnLogo(input.logo_url),
     })
-    .returning();
+    .returning()
+    .catch(mapGroupConflict);
 
   if (!created) {
     throw new HttpError(500, "internal_error", "Failed to create group");
@@ -138,9 +147,15 @@ export async function updateGroup(
     .update(collectionGroups)
     .set(patch)
     .where(eq(collectionGroups.id, groupId))
-    .returning();
+    .returning()
+    .catch(mapGroupConflict);
   if (!updated) {
     throw new HttpError(500, "internal_error", "Failed to update group");
+  }
+
+  // Remove the previous logo once it has been replaced.
+  if (input.logo_url !== undefined && existing.logoUrl && existing.logoUrl !== updated.logoUrl) {
+    await destroyLogo(existing.logoUrl);
   }
   return updated;
 }
@@ -153,6 +168,7 @@ export async function deleteGroup(
   merchant: Merchant,
   groupId: string,
 ): Promise<void> {
-  await getGroup(merchant, groupId);
+  const group = await getGroup(merchant, groupId);
   await db.delete(collectionGroups).where(eq(collectionGroups.id, groupId));
+  await destroyLogo(group.logoUrl);
 }
