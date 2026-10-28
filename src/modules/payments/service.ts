@@ -199,54 +199,62 @@ async function ensureGatewayCustomerForMerchant(
 }
 
 /**
- * Gets or creates a guest user for anonymous payments.
- * Guest users allow payments without account creation.
+ * Gets or creates a user for the payer. For authenticated users, returns the user.
+ * For anonymous payers, requires payer_email and creates/fetches a guest user.
  */
-async function getOrCreateGuestUser(): Promise<User> {
-  const guestEmail = "guest@payments.local";
-  
-  // Try to find existing guest user
-  const existing = await db.query.users.findFirst({
-    where: eq(users.email, guestEmail),
-  });
-  
-  if (existing) return existing;
-
-  // Create guest user
-  const guestId = `guest-${Date.now()}`;
-  try {
-    const [created] = await db
-      .insert(users)
-      .values({
-        id: guestId,
-        name: "Guest",
-        email: guestEmail,
-        emailVerified: true,
-        active: true,
-        role: "user",
-        methods: "email",
-        defaultCurrency: "NGN",
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    if (created) return created;
-    
-    // If conflict occurred, fetch the existing one
-    const retry = await db.query.users.findFirst({
-      where: eq(users.email, guestEmail),
-    });
-    
-    if (retry) return retry;
-  } catch (err) {
-    // Race condition: another request created the guest user
-    const retry = await db.query.users.findFirst({
-      where: eq(users.email, guestEmail),
-    });
-    if (retry) return retry;
+async function getOrCreatePayerUser(
+  authenticatedUser: User | null,
+  payerEmail?: string,
+  payerName?: string,
+): Promise<User> {
+  // If user is authenticated, use their account
+  if (authenticatedUser) {
+    return authenticatedUser;
   }
 
-  throw new HttpError(500, "internal_error", "Failed to create guest user");
+  // For anonymous payers, email is required
+  if (!payerEmail) {
+    throw new HttpError(
+      422,
+      "payer_email_required",
+      "payer_email is required for guest payments",
+    );
+  }
+
+  // Try to find existing user with this email
+  const existing = await db.query.users.findFirst({
+    where: eq(users.email, payerEmail),
+  });
+
+  if (existing) return existing;
+
+  // Create a new guest user with the payer's email
+  const guestId = `guest-${newId()}`;
+  const [created] = await db
+    .insert(users)
+    .values({
+      id: guestId,
+      name: payerName || "Guest",
+      email: payerEmail,
+      emailVerified: false,
+      active: true,
+      role: "user",
+      methods: "email",
+      defaultCurrency: "NGN",
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (created) return created;
+
+  // Race condition: another request created the user, fetch it
+  const retry = await db.query.users.findFirst({
+    where: eq(users.email, payerEmail),
+  });
+
+  if (retry) return retry;
+
+  throw new HttpError(500, "internal_error", "Failed to create payer user");
 }
 
 export interface InitPaymentResult {
@@ -265,8 +273,12 @@ export async function initPayment(
   user: User | null,
   input: InitPaymentInput,
 ): Promise<InitPaymentResult> {
-  // Ensure we have a user - create a guest user if anonymous
-  const effectiveUser = user ?? await getOrCreateGuestUser();
+  // Ensure we have a user - use authenticated user or create guest with payer email
+  const effectiveUser = await getOrCreatePayerUser(
+    user,
+    input.payer_email,
+    input.payer_name,
+  );
   
   const collection = await db.query.collections.findFirst({
     where: eq(collections.shortCode, input.collection_short_code),
