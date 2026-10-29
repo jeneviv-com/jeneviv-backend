@@ -226,6 +226,35 @@ async function handleChargeSuccess(
   if (!tx) return;
   if (tx.status === "success") return;
 
+  // Compare what arrived with what the payer was asked to pay. Amounts are compared
+  // in naira to the kobo, so rounding can't turn an exact payment into a shortfall.
+  const receivedNaira = round2(toMajor(event.amountPaid, event.currency));
+  const expectedNaira = round2(Number(tx.totalCharged));
+  const differenceNaira = round2(expectedNaira - receivedNaira);
+
+  if (differenceNaira > 0) {
+    // Underpaid: the transfer is recorded, but the payment is not marked successful.
+    // It stays pending until the balance arrives, and the coordinator sees it in the audit trail.
+    await recordAudit({
+      actorUid: null,
+      action: "transaction.underpaid",
+      entityType: "transaction",
+      entityId: tx.id,
+      metadata: {
+        reference: event.reference,
+        expected: expectedNaira,
+        received: receivedNaira,
+        short_by: differenceNaira,
+        currency: tx.currency,
+      },
+    });
+    return;
+  }
+
+  // Overpaid: the payment is successful for the amount requested. The excess is logged,
+  // and is refunded by a coordinator, never automatically.
+  const overpaidByNaira = round2(-differenceNaira);
+
   // Flutterwave funds land in our balance and must be promoted to the merchant.
   // Split gateways (Paystack) settle straight to the merchant subaccount, so we
   // only record the transaction and never touch a wallet balance.
@@ -249,7 +278,7 @@ async function handleChargeSuccess(
                 tx.gatewayFee +
                 toMajor(event.gatewayFee, event.currency),
             }
-          : { settledAt: event.paidAt }),
+          : {}),
       })
       .where(
         and(
@@ -284,8 +313,25 @@ async function handleChargeSuccess(
       gateway_fee: toMajor(event.gatewayFee, event.currency),
       currency: tx.currency,
       settled_direct: !holdsFunds,
+      overpaid_by: overpaidByNaira > 0 ? overpaidByNaira : 0,
     },
   });
+
+  if (overpaidByNaira > 0) {
+    await recordAudit({
+      actorUid: null,
+      action: "transaction.overpaid",
+      entityType: "transaction",
+      entityId: tx.id,
+      metadata: {
+        reference: event.reference,
+        expected: expectedNaira,
+        received: receivedNaira,
+        overpaid_by: overpaidByNaira,
+        currency: tx.currency,
+      },
+    });
+  }
 
   await sendReceiptEmail({
     reference: tx.reference,
@@ -348,4 +394,9 @@ export async function applyVerifiedCharge(args: {
     paidAt: args.paidAt,
     raw: null,
   });
+}
+
+/** Rounds to kobo. Used so amount comparisons never fail on floating-point noise. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
