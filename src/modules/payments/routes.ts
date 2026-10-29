@@ -12,7 +12,7 @@ export const paymentsRouter = Router();
 // Returns status only, never payer details.
 paymentsRouter.get("/status/:reference", async (req, res, next) => {
   try {
-    res.json(await getPublicPaymentStatus(req.params.reference));
+    res.json(await getPublicPaymentStatus(String(req.params.reference)));
   } catch (err) {
     next(err);
   }
@@ -38,7 +38,7 @@ paymentsRouter.post(
 // instead of waiting for the webhook. Rate limited like init.
 paymentsRouter.post("/status/:reference/confirm", rateLimiter.paymentLimiter, async (req, res, next) => {
   try {
-    res.json(await confirmPaymentNow(req.params.reference));
+    res.json(await confirmPaymentNow(String(req.params.reference)));
   } catch (err) {
     next(err);
   }
