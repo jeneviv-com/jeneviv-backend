@@ -31,6 +31,8 @@ import { toMajor, toMinor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
 import { ensureMerchantSubaccount } from "../merchants/service.js";
+import { applyVerifiedCharge } from "../webhooks/service.js";
+import { getGateway } from "../../gateways/registry.js";
 import type { InitPaymentInput } from "./schemas.js";
 
 const REFERENCE_ALPHABET =
@@ -547,4 +549,37 @@ export async function getPublicPaymentStatus(reference: string) {
     currency: tx.currency,
     paid_at: tx.paidAt ? tx.paidAt.toISOString() : null,
   };
+}
+
+/**
+ * Called the moment a payer taps "I have sent the money". Asks the gateway whether
+ * the transfer has arrived and records it if so. Safe to call repeatedly: a
+ * payment that is already recorded is returned as it is.
+ */
+export async function confirmPaymentNow(reference: string) {
+  const tx = await db.query.transactions.findFirst({
+    where: eq(transactions.reference, reference),
+  });
+  if (!tx) {
+    throw new HttpError(404, "not_found", "Payment not found");
+  }
+
+  if (tx.status === "pending") {
+    const gateway = getGateway(tx.gateway);
+    if (gateway.verifyPayment) {
+      const verified = await gateway.verifyPayment(reference);
+      if (verified?.status === "success") {
+        await applyVerifiedCharge({
+          reference,
+          gatewayId: verified.gatewayId,
+          amountPaidMinor: verified.amountPaidMinor,
+          gatewayFeeMinor: verified.gatewayFeeMinor,
+          currency: verified.currency,
+          paidAt: verified.paidAt ?? new Date(),
+        });
+      }
+    }
+  }
+
+  return getPublicPaymentStatus(reference);
 }
