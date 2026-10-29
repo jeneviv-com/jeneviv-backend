@@ -4,7 +4,7 @@ import { optionalAuth } from "../../middleware/optional-auth.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validate } from "../../middleware/validate.js";
 import { initPaymentSchema } from "./schemas.js";
-import { getPublicPaymentStatus, initPayment } from "./service.js";
+import { confirmPaymentNow, getPublicPaymentStatus, initPayment } from "./service.js";
 
 export const paymentsRouter = Router();
 
@@ -33,5 +33,15 @@ paymentsRouter.post(
     }
   },
 );
+
+// Public: the payer has tapped "I have sent the money". Ask the gateway right now
+// instead of waiting for the webhook. Rate limited like init.
+paymentsRouter.post("/status/:reference/confirm", rateLimiter.paymentLimiter, async (req, res, next) => {
+  try {
+    res.json(await confirmPaymentNow(req.params.reference));
+  } catch (err) {
+    next(err);
+  }
+});
 
 paymentsRouter.use(requireAuth);
