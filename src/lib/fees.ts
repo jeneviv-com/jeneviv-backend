@@ -46,11 +46,20 @@ export const PAYSTACK_FLAT_APPLIES_FROM_NGN = 2_500;
 export const PAYSTACK_CAP_NGN = 2_000; // unverified
 
 /*
- * TEST SWITCH. false = send only collection + platform fee and let Paystack
- * apply its own fee. true = Jeneviv adds Paystack's fee to the payer's charge.
- * Leave false until a test payment shows how Paystack behaves.
+ * LOCKED DECISION: the payer covers Paystack's processing fee.
+ *
+ * true  = Jeneviv adds Paystack's fee to the payer's charge. The payer pays it,
+ *         the merchant receives exactly the collection amount, and Jeneviv keeps
+ *         its platform fee. This is the live setting.
+ * false = the fee is taken out of the merchant's share instead, because the
+ *         charge is sent with `bearer: "subaccount"`. On a N5,000 collection
+ *         that leaves the merchant about N176 short, which is why this must not
+ *         be flipped back without also changing who bears the charge.
+ *
+ * The fee constants below are estimates until seen on a real payment: check
+ * `fees`/`fees_split` on one test charge before treating a payer total as final.
  */
-export const PAYSTACK_GROSS_UP = false;
+export const PAYSTACK_GROSS_UP = true;
 
 export function paystackFeeNgn(chargeNgn: number): number {
   const percent = Math.ceil((chargeNgn * PAYSTACK_PERCENT_BASIS_POINTS) / 10_000);
