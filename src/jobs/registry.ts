@@ -7,7 +7,7 @@ import { runSettleWallet } from "./settle-wallet.js";
 export interface JobDefinition {
   name: string;
   description: string;
-  /** Crontab expression to set in Railway's cron job UI (UTC). */
+  /** Crontab expression to set in Render's cron job UI (UTC). */
   cron: string;
   run: () => Promise<unknown>;
 }

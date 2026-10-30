@@ -76,8 +76,9 @@ export function signUpload(args: SignUploadArgs): SignedUploadParams {
 
 /**
  * True if `url` is an HTTPS Cloudinary delivery URL hosted on the configured cloud.
- * Accepts both `res.cloudinary.com/<cloud>/...` and `<cloud>-res.cloudinary.com/...`
- * shapes.
+ * Only the canonical `res.cloudinary.com/<cloud>/...` shape is accepted: it is the
+ * only host Cloudinary issues delivery URLs on, so anything else is a stored URL
+ * we should not sign a delete for.
  */
 export function isCloudinaryUrlOnOurCloud(url: string): boolean {
   const cloud = env.CLOUDINARY_CLOUD_NAME;
