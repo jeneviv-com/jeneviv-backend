@@ -175,8 +175,8 @@ export async function approveWithdrawal(
  * Rejects a withdrawal request.
  */
 export async function rejectWithdrawal(
-  approvalToken: string,
-  reason?: string,
+  _approvalToken: string,
+  _reason?: string,
 ): Promise<{ success: true }> {
   throw new HttpError(501, "not_implemented", "Withdrawal rejection not yet implemented");
 }
