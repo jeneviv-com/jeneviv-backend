@@ -117,10 +117,12 @@ adminRouter.post(
   async (req, res, next) => {
     try {
       const { id } = req.params as { id: string };
+      const body = req.body as { note?: string; confirm_duplicate?: boolean };
       const merchant = await approveMerchant(
         req.user!.id,
         id,
-        (req.body as { note?: string }).note,
+        body.note,
+        body.confirm_duplicate === true,
       );
       res.json({ merchant });
     } catch (err) {

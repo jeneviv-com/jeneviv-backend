@@ -233,6 +233,13 @@ async function handleChargeSuccess(
   const differenceNaira = round2(expectedNaira - receivedNaira);
 
   if (differenceNaira > 0) {
+    // Remember what has arrived so the payer can be told the exact shortfall.
+    // Set, not added to: a status check repeats the same figure, so adding would double count.
+    await db
+      .update(transactions)
+      .set({ amountReceived: receivedNaira })
+      .where(eq(transactions.id, tx.id));
+
     // Underpaid: the transfer is recorded, but the payment is not marked successful.
     // It stays pending until the balance arrives, and the coordinator sees it in the audit trail.
     await recordAudit({

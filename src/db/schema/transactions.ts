@@ -37,6 +37,7 @@ export const transactions = pgTable(
     platformFee: numeric("platform_fee", MONEY_PRECISION).notNull(),
     gatewayFee: numeric("gateway_fee", MONEY_PRECISION).notNull().default(0),
     totalCharged: numeric("total_charged", MONEY_PRECISION).notNull(),
+    amountReceived: numeric("amount_received", MONEY_PRECISION).notNull().default(0),
     currency: text("currency").notNull(),
     gateway: text("gateway").$type<GatewayName>().notNull(),
     gatewayRef: text("gateway_ref"),

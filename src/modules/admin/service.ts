@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../db/schema/auth.js";
 import { collections } from "../../db/schema/collections.js";
 import {
+  merchantBankAccounts,
   merchants,
   type Merchant,
 } from "../../db/schema/merchants.js";
@@ -201,17 +202,89 @@ async function transitionStatus(
   return updated;
 }
 
-export function approveMerchant(
+export interface DuplicateMatch {
+  kind: "bank_account" | "workspace_name";
+  merchant_id: string;
+  display_name: string | null;
+}
+
+/**
+ * Approved workspaces that share a settlement bank account or a workspace name
+ * with this one. A copied collection would usually reuse one of these.
+ */
+async function findDuplicateIdentity(merchantId: string): Promise<DuplicateMatch[]> {
+  const merchant = await db.query.merchants.findFirst({
+    where: eq(merchants.id, merchantId),
+  });
+  if (!merchant) return [];
+
+  const matches: DuplicateMatch[] = [];
+
+  const accounts = await db
+    .select({ accountNumber: merchantBankAccounts.accountNumber })
+    .from(merchantBankAccounts)
+    .where(eq(merchantBankAccounts.merchantId, merchantId));
+
+  for (const account of accounts) {
+    const sameAccount = await db
+      .select({ merchantId: merchants.id, displayName: merchants.displayName })
+      .from(merchantBankAccounts)
+      .innerJoin(merchants, eq(merchants.id, merchantBankAccounts.merchantId))
+      .where(
+        and(
+          eq(merchantBankAccounts.accountNumber, account.accountNumber),
+          ne(merchantBankAccounts.merchantId, merchantId),
+          eq(merchants.status, "approved"),
+        ),
+      );
+    for (const row of sameAccount) {
+      matches.push({ kind: "bank_account", merchant_id: row.merchantId, display_name: row.displayName });
+    }
+  }
+
+  if (merchant.displayName) {
+    const sameName = await db
+      .select({ merchantId: merchants.id, displayName: merchants.displayName })
+      .from(merchants)
+      .where(
+        and(
+          sql`lower(${merchants.displayName}) = lower(${merchant.displayName})`,
+          ne(merchants.id, merchantId),
+          eq(merchants.status, "approved"),
+        ),
+      );
+    for (const row of sameName) {
+      matches.push({ kind: "workspace_name", merchant_id: row.merchantId, display_name: row.displayName });
+    }
+  }
+
+  return matches;
+}
+
+export async function approveMerchant(
   adminUid: string,
   merchantId: string,
   note?: string,
+  confirmDuplicate = false,
 ): Promise<Merchant> {
+  const matches = await findDuplicateIdentity(merchantId);
+  if (matches.length > 0 && !confirmDuplicate) {
+    throw new HttpError(
+      409,
+      "possible_duplicate",
+      "This workspace shares a bank account or name with an approved workspace. Review it, then approve again with confirm_duplicate set to true.",
+      { matches },
+    );
+  }
+  const approvalNote =
+    matches.length > 0 ? `[duplicate reviewed] ${note ?? ""}`.trim() : note;
+
   return transitionStatus(
     adminUid,
     merchantId,
     "approved",
     "merchant.approve",
-    note,
+    approvalNote,
     ["pending", "rejected", "suspended"],
   );
 }

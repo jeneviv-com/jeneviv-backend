@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import type { User } from "../../db/schema/auth.js";
 import { users } from "../../db/schema/auth.js";
@@ -542,12 +542,21 @@ export async function getPublicPaymentStatus(reference: string) {
   if (!tx) {
     throw new HttpError(404, "not_found", "Payment not found");
   }
+  const expected = Number(tx.totalCharged);
+  const received = Number(tx.amountReceived ?? 0);
+  const shortfall =
+    tx.status === "pending" && received > 0 && received < expected
+      ? Math.round((expected - received) * 100) / 100
+      : null;
+
   return {
     reference: tx.reference,
     status: tx.status,
     amount: tx.amount,
     currency: tx.currency,
     paid_at: tx.paidAt ? tx.paidAt.toISOString() : null,
+    amount_received: received,
+    shortfall,
   };
 }
 

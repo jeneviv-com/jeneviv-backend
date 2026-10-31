@@ -91,11 +91,7 @@ export async function markWithdrawalFailedByRef(
 import type { Merchant } from "../../db/schema/merchants.js";
 import type { User } from "../../db/schema/auth.js";
 import { HttpError } from "../../middleware/error.js";
-import type {
-  CreateWithdrawalInput,
-  ApproveWithdrawalInput,
-  RejectWithdrawalInput,
-} from "./schemas.js";
+import type { CreateWithdrawalInput } from "./schemas.js";
 
 /**
  * Creates a new withdrawal request for a merchant.
@@ -103,9 +99,12 @@ import type {
  */
 export async function createWithdrawal(
   merchant: Merchant,
-  user: User,
-  input: CreateWithdrawalInput,
+  _user: User,
+  _input: CreateWithdrawalInput,
 ): Promise<Withdrawal> {
+  if (!merchant.escrowEnabled) {
+    throw new HttpError(403, "escrow_disabled", "Escrow withdrawals are not enabled for this workspace");
+  }
   throw new HttpError(501, "not_implemented", "Withdrawal creation not yet implemented");
 }
 
@@ -148,7 +147,7 @@ export async function listWithdrawals(
  * Gets the approval summary for a withdrawal by approval token.
  */
 export async function getApprovalSummary(
-  approvalToken: string,
+  _approvalToken: string,
 ): Promise<{
   id: string;
   merchant_name: string;
@@ -166,8 +165,8 @@ export async function getApprovalSummary(
  * Approves a withdrawal with the OTP sent to the treasurer.
  */
 export async function approveWithdrawal(
-  approvalToken: string,
-  otp: string,
+  _approvalToken: string,
+  _otp: string,
 ): Promise<{ success: true; withdrawal_id: string }> {
   throw new HttpError(501, "not_implemented", "Withdrawal approval not yet implemented");
 }

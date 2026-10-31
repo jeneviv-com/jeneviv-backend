@@ -57,6 +57,20 @@
       "when": 1793028132232,
       "tag": "0007_redundant_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793200000000,
+      "tag": "0008_escrow_default_off",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793300000000,
+      "tag": "0009_amount_received",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,8 @@ export type ListAuditLogsQuery = z.infer<typeof listAuditLogsQuerySchema>;
 
 export const approveMerchantSchema = z.object({
   note: z.string().trim().max(2000).optional(),
+  // Set only after an admin has reviewed a possible duplicate identity.
+  confirm_duplicate: z.boolean().optional(),
 });
 export type ApproveMerchantInput = z.infer<typeof approveMerchantSchema>;
 

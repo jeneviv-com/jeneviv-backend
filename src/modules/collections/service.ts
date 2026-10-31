@@ -12,6 +12,7 @@ import {
 } from "../../db/schema/collections.js";
 import {
   merchantBankAccounts,
+  merchants,
   type Merchant,
 } from "../../db/schema/merchants.js";
 import { transactions } from "../../db/schema/transactions.js";
@@ -438,12 +439,23 @@ export async function replaceCollectionFields(
   });
 }
 
+export interface CollectionPayee {
+  /** Workspace display name. */
+  display_name: string | null;
+  /** Legal name from NIN verification, when it has been verified. */
+  legal_name: string | null;
+  /** Name on the default settlement bank account. */
+  bank_account_name: string | null;
+  bank_verified: boolean;
+}
+
 export async function getCollectionByShortCode(
   shortCode: string,
 ): Promise<{
   collection: Collection;
   fields: CollectionField[];
   group: CollectionGroup | null;
+  payee: CollectionPayee;
 }> {
   const collection = await db.query.collections.findFirst({
     where: eq(collections.shortCode, shortCode),
@@ -460,5 +472,28 @@ export async function getCollectionByShortCode(
   });
   // The payer page shows the group's name and logo when the collection is filed
   // under one, so it has to travel with the collection.
-  return { collection, fields, group: await loadGroup(collection.groupId) };
+  // Who the money goes to, shown before the payer pays, so a copied page that
+  // sends money elsewhere is visible before any transfer is made.
+  const merchant = await db.query.merchants.findFirst({
+    where: eq(merchants.id, collection.merchantId),
+  });
+  const [defaultAccount] = await db
+    .select({ accountName: merchantBankAccounts.accountName })
+    .from(merchantBankAccounts)
+    .where(
+      and(
+        eq(merchantBankAccounts.merchantId, collection.merchantId),
+        eq(merchantBankAccounts.isDefault, true),
+      ),
+    )
+    .limit(1);
+
+  const payee: CollectionPayee = {
+    display_name: merchant?.displayName ?? null,
+    legal_name: merchant?.ninVerifiedAt ? (merchant.kycLegalName ?? null) : null,
+    bank_account_name: defaultAccount?.accountName ?? null,
+    bank_verified: Boolean(merchant?.bankVerifiedAt),
+  };
+
+  return { collection, fields, group: await loadGroup(collection.groupId), payee };
 }

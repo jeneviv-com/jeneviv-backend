@@ -88,7 +88,7 @@ export const merchants = pgTable(
     logoUrl: text("logo_url"),
     treasurerName: text("treasurer_name"),
     treasurerPhone: text("treasurer_phone"),
-    escrowEnabled: boolean("escrow_enabled").notNull().default(true),
+    escrowEnabled: boolean("escrow_enabled").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),
