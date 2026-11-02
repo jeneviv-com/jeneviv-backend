@@ -16,6 +16,7 @@ import {
   createMerchantBankAccount,
   deleteMerchantBankAccount,
   getMerchantForUser,
+  getMerchantSettlementStatus,
   listMerchantBankAccounts,
   updateMerchantSettings,
 } from "./service.js";
@@ -156,3 +157,16 @@ merchantsRouter.delete(
     }
   },
 );
+
+merchantsRouter.get("/me/settlement-status", async (req, res, next) => {
+  try {
+    const merchant = await getMerchantForUser(req.user!.id);
+    const gateway = req.query.gateway as string | undefined;
+    
+    // Get settlement status from service
+    const status = await getMerchantSettlementStatus(merchant, gateway);
+    res.json({ status });
+  } catch (err) {
+    next(err);
+  }
+});

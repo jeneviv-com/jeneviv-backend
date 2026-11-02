@@ -6,6 +6,7 @@ import {
   type Merchant,
   type MerchantBankAccount,
 } from "../../db/schema/merchants.js";
+import { payouts } from "../../db/schema/payouts.js";
 import { getDefaultGateway } from "../../gateways/registry.js";
 import { GatewayError } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
@@ -331,4 +332,100 @@ export async function deleteMerchantBankAccount(
     entityId: bankAccountId,
     metadata: { merchant_id: merchant.id },
   });
+}
+
+export interface SettlementStatus {
+  gateway: string;
+  direct_settlement_active: boolean;
+  has_subaccount: boolean;
+  subaccount_code: string | null;
+  last_payout_at: string | null;
+  pending_payouts: number;
+  total_settled: number;
+  can_withdraw: boolean;
+  kyc_status: string;
+  bank_account_verified: boolean;
+  default_bank_account: {
+    id: string | null;
+    bank_name: string | null;
+    account_number: string | null;
+  };
+}
+
+export async function getMerchantSettlementStatus(
+  merchant: Merchant,
+  gatewayName?: string,
+): Promise<SettlementStatus> {
+  const gateway = getDefaultGateway();
+  const targetGateway = gatewayName ? getDefaultGateway() : gateway;
+  
+  // Check if direct settlement is active
+  const directSettlementActive = targetGateway.ensureSubaccount !== undefined;
+  
+  // Get subaccount info
+  const hasSubaccount = !!merchant.gatewaySubaccountIds?.[targetGateway.name];
+  const subaccountCode = merchant.gatewaySubaccountIds?.[targetGateway.name] || null;
+  
+  // Get last payout
+  const lastPayout = await db.query.payouts.findFirst({
+    where: (payouts, { eq, and, isNotNull }) => and(
+      eq(payouts.merchantId, merchant.id),
+      eq(payouts.status, 'success'),
+      isNotNull(payouts.createdAt)
+    ),
+    orderBy: (payouts, { desc }) => [desc(payouts.createdAt)],
+  });
+  
+  // Get pending payouts
+  const pendingPayouts = await db.query.payouts.findMany({
+    where: (payouts, { eq, and, inArray }) => and(
+      eq(payouts.merchantId, merchant.id),
+      inArray(payouts.status, ['pending', 'processing'])
+    ),
+  });
+  
+  // Get total settled
+  const totalSettledResult = await db.select({
+    total: sql<number>`COALESCE(SUM(${payouts.amount}), 0)`
+  })
+  .from(payouts)
+  .where(and(
+    eq(payouts.merchantId, merchant.id),
+    eq(payouts.status, 'success')
+  ));
+  
+  // Get default bank account
+  let defaultBankAccount = {
+    id: null as string | null,
+    bank_name: null as string | null,
+    account_number: null as string | null,
+  };
+  
+  if (merchant.defaultBankAccountId) {
+    const bankAccount = await db.query.merchantBankAccounts.findFirst({
+      where: eq(merchantBankAccounts.id, merchant.defaultBankAccountId),
+    });
+    
+    if (bankAccount) {
+      defaultBankAccount = {
+        id: bankAccount.id,
+        bank_name: null, // Would need to fetch bank name from gateway
+        account_number: bankAccount.accountNumber,
+      };
+    }
+  }
+  
+  return {
+    gateway: targetGateway.name,
+    direct_settlement_active: directSettlementActive,
+    has_subaccount: hasSubaccount,
+    subaccount_code: subaccountCode,
+    last_payout_at: lastPayout?.createdAt?.toISOString() || null,
+    pending_payouts: pendingPayouts.length,
+    total_settled: Number(totalSettledResult[0]?.total || 0),
+    can_withdraw: merchant.canWithdraw,
+    kyc_status: merchant.kycStatus,
+    bank_account_verified: !!merchant.bankVerifiedAt,
+    default_bank_account: defaultBankAccount,
+  };
 }
