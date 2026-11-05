@@ -28,6 +28,11 @@ export interface PublicReceipt {
   bank_verified: boolean;
   verify_url: string;
   receipt_url: string;
+  /** The merchant workspace the money settles to. */
+  workspace_name: string;
+  /** The group the collection is filed under, when it has one. */
+  group_name: string | null;
+  group_logo_url: string | null;
   details: Array<{ label: string; value: string }>;
 }
 
@@ -94,16 +99,13 @@ async function loadReceipt(reference: string): Promise<{
     bank_verified: Boolean(merchant.bankVerifiedAt),
     verify_url: verifyUrl(tx.reference),
     receipt_url: `${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/api/verify/${encodeURIComponent(tx.reference)}/receipt.pdf`,
+    workspace_name: merchant.displayName ?? merchant.merchantCode,
+    group_name: group?.name ?? null,
+    group_logo_url: group?.logoUrl ?? null,
+    // The receipt page renders Collection, Group and Workspace itself, so these
+    // rows only carry the collection's own fields.
     details: [
       { label: "Collection", value: collection?.name ?? "Payment" },
-      ...(group
-        ? [
-            {
-              label: "Workspace",
-              value: merchant.displayName ?? merchant.merchantCode,
-            },
-          ]
-        : []),
       ...details,
     ],
   };
@@ -132,6 +134,8 @@ export async function renderPublicReceiptPdf(
     ninVerified: receipt.nin_verified,
     bankVerified: receipt.bank_verified,
     verifyUrl: receipt.verify_url,
+    groupName: receipt.group_name,
+    workspaceName: receipt.workspace_name,
     details: receipt.details.filter((d) => d.label !== "Collection"),
   });
   return {

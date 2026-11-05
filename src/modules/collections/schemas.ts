@@ -49,6 +49,16 @@ export const exportCollectionQuerySchema = z.object({
 });
 export type ExportCollectionQuery = z.infer<typeof exportCollectionQuerySchema>;
 
+/** PDF export: same scope, plus the columns the dashboard selected. */
+export const exportCollectionPdfQuerySchema = z.object({
+  status: z.enum(["paid", "unpaid"]).default("paid"),
+  /** Comma-separated column keys, e.g. reference,amount,field:Matric No. */
+  columns: z.string().max(1200).optional(),
+});
+export type ExportCollectionPdfQuery = z.infer<
+  typeof exportCollectionPdfQuerySchema
+>;
+
 export const shortCodeParamSchema = z.object({
   short_code: z.string().min(1).max(64),
 });

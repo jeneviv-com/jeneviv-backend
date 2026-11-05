@@ -10,13 +10,16 @@ import { listCollectionTransactionsForMerchant } from "../transactions/service.j
 import {
   collectionIdParamSchema,
   createCollectionSchema,
+  exportCollectionPdfQuerySchema,
   exportCollectionQuerySchema,
   replaceCollectionFieldsSchema,
   shortCodeParamSchema,
   updateCollectionSchema,
+  type ExportCollectionPdfQuery,
   type ExportCollectionQuery,
 } from "./schemas.js";
 import { buildCollectionExport } from "./export.js";
+import { buildCollectionPdf } from "./export-pdf.js";
 import {
   createCollection,
   deleteCollection,
@@ -80,6 +83,33 @@ collectionsRouter.get(
         "Content-Type",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${file.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+      );
+      res.send(file.buffer);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+collectionsRouter.get(
+  "/:id/export.pdf",
+  validate(collectionIdParamSchema, "params"),
+  validate(exportCollectionPdfQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params as { id: string };
+      const { status, columns } = req.query as unknown as ExportCollectionPdfQuery;
+      const keys = columns
+        ? columns
+            .split(",")
+            .map((column) => column.trim())
+            .filter(Boolean)
+        : undefined;
+      const file = await buildCollectionPdf(req.merchant!, id, status, keys);
+      res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
         `attachment; filename="${file.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,

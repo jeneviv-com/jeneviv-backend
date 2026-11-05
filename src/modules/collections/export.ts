@@ -2,13 +2,16 @@ import ExcelJS from "exceljs";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../db/schema/auth.js";
-import { collections } from "../../db/schema/collections.js";
+import {
+  collectionGroups,
+  collections,
+} from "../../db/schema/collections.js";
 import { merchants } from "../../db/schema/merchants.js";
+import type { Merchant } from "../../db/schema/merchants.js";
 import {
   transactionFields,
   transactions,
 } from "../../db/schema/transactions.js";
-import type { Merchant } from "../../db/schema/merchants.js";
 import { HttpError } from "../../middleware/error.js";
 
 export type ExportStatus = "paid" | "unpaid";
@@ -21,11 +24,36 @@ const UNPAID_STATUSES = [
   "expired",
 ] as const;
 
-export async function buildCollectionExport(
+export type ExportCell = string | number;
+
+export interface ExportColumn {
+  /** Stable key, used by the dashboard to pick columns and by the PDF builder. */
+  key: string;
+  header: string;
+  width: number;
+}
+
+export interface CollectionExport {
+  collectionName: string;
+  groupName: string | null;
+  groupLogoUrl: string | null;
+  workspaceName: string;
+  status: ExportStatus;
+  /** File name without extension: code-collection-status. */
+  filenameBase: string;
+  columns: ExportColumn[];
+  rows: Array<Record<string, ExportCell>>;
+}
+
+/**
+ * One loader shared by the spreadsheet and the PDF, so both exports always
+ * describe the same rows in the same order.
+ */
+export async function loadCollectionExport(
   merchant: Merchant,
   collectionId: string,
   status: ExportStatus,
-): Promise<{ buffer: Buffer; filename: string }> {
+): Promise<CollectionExport> {
   const collection = await db.query.collections.findFirst({
     where: and(
       eq(collections.id, collectionId),
@@ -35,9 +63,18 @@ export async function buildCollectionExport(
   if (!collection) {
     throw new HttpError(404, "not_found", "Collection not found");
   }
+
   const merchantRow = await db.query.merchants.findFirst({
     where: eq(merchants.id, merchant.id),
   });
+
+  // A collection filed under a group is exported under that group, so the sheet
+  // header names the entity the payers recognise.
+  const group = collection.groupId
+    ? await db.query.collectionGroups.findFirst({
+        where: eq(collectionGroups.id, collection.groupId),
+      })
+    : null;
 
   const rows = await db
     .select()
@@ -74,35 +111,23 @@ export async function buildCollectionExport(
     byTransaction.set(field.transactionId, map);
   }
 
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Jeneviv";
-  workbook.created = new Date();
-  const sheet = workbook.addWorksheet(status === "paid" ? "Paid" : "Unpaid");
-
-  const columns: Array<{ header: string; key: string; width: number }> = [
-    { header: "Reference", key: "reference", width: 30 },
-    ...fieldNames.map((name, index) => ({
+  const columns: ExportColumn[] = [
+    { key: "reference", header: "Reference", width: 30 },
+    ...fieldNames.map((name) => ({
+      key: `field:${name}`,
       header: name,
-      key: `field_${index}`,
       width: 24,
     })),
-    { header: "Payer", key: "payer", width: 24 },
-    { header: "Amount (NGN)", key: "amount", width: 16 },
-    { header: "Fees (NGN)", key: "fees", width: 14 },
-    { header: "Status", key: "status", width: 14 },
-    { header: "Paid at", key: "paid_at", width: 22 },
-    { header: "Created at", key: "created_at", width: 22 },
+    { key: "payer", header: "Payer", width: 24 },
+    { key: "amount", header: "Amount (NGN)", width: 16 },
+    { key: "fees", header: "Fees (NGN)", width: 14 },
+    { key: "status", header: "Status", width: 14 },
+    { key: "paid_at", header: "Paid at", width: 22 },
+    { key: "created_at", header: "Created at", width: 22 },
   ];
-  sheet.columns = columns;
-  sheet.getRow(1).font = { bold: true };
-  sheet.getRow(1).fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FFF3E7DC" },
-  };
 
-  for (const row of rows) {
-    const values: Record<string, string | number> = {
+  const data = rows.map((row) => {
+    const values: Record<string, ExportCell> = {
       reference: row.reference,
       payer: payerNames.get(row.customerId) ?? "",
       // Transactions are stored in whole naira, the same unit the dashboard
@@ -113,10 +138,65 @@ export async function buildCollectionExport(
       paid_at: row.paidAt?.toISOString() ?? "",
       created_at: row.createdAt.toISOString(),
     };
-    fieldNames.forEach((name, index) => {
-      values[`field_${index}`] = byTransaction.get(row.id)?.get(name) ?? "";
-    });
-    sheet.addRow(values);
+    for (const name of fieldNames) {
+      values[`field:${name}`] = byTransaction.get(row.id)?.get(name) ?? "";
+    }
+    return values;
+  });
+
+  const safeName = collection.name.replace(/[^a-zA-Z0-9-_]+/g, "-").slice(0, 50);
+
+  return {
+    collectionName: collection.name,
+    groupName: group?.name ?? null,
+    groupLogoUrl: group?.logoUrl ?? null,
+    workspaceName:
+      merchantRow?.displayName ?? merchantRow?.merchantCode ?? "Workspace",
+    status,
+    filenameBase: `${merchantRow?.merchantCode ?? "collection"}-${safeName}-${status}`,
+    columns,
+    rows: data,
+  };
+}
+
+/** Keeps only the columns the dashboard asked for, in the order it listed them. */
+export function pickExportColumns(
+  data: CollectionExport,
+  keys?: string[],
+): ExportColumn[] {
+  if (!keys || keys.length === 0) return data.columns;
+  const wanted = keys
+    .map((key) => data.columns.find((column) => column.key === key))
+    .filter((column): column is ExportColumn => Boolean(column));
+  return wanted.length ? wanted : data.columns;
+}
+
+export async function buildCollectionExport(
+  merchant: Merchant,
+  collectionId: string,
+  status: ExportStatus,
+): Promise<{ buffer: Buffer; filename: string }> {
+  const data = await loadCollectionExport(merchant, collectionId, status);
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Jeneviv";
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet(status === "paid" ? "Paid" : "Unpaid");
+
+  sheet.columns = data.columns.map((column) => ({
+    header: column.header,
+    key: column.key,
+    width: column.width,
+  }));
+  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFF3E7DC" },
+  };
+
+  for (const row of data.rows) {
+    sheet.addRow(row);
   }
 
   sheet.getColumn("amount").numFmt = "#,##0.00";
@@ -124,10 +204,8 @@ export async function buildCollectionExport(
   sheet.autoFilter = { from: "A1", to: `${sheet.columnCount}1` };
 
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  const safeName = collection.name.replace(/[^a-zA-Z0-9-_]+/g, "-").slice(0, 50);
   return {
     buffer,
-    filename: `${merchantRow?.merchantCode ?? "collection"}-${safeName}-${status}.xlsx`,
+    filename: `${data.filenameBase}.xlsx`,
   };
 }
-

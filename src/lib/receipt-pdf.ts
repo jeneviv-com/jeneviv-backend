@@ -15,6 +15,8 @@ export interface ReceiptPdfData {
   ninVerified: boolean;
   bankVerified: boolean;
   verifyUrl: string;
+  groupName?: string | null;
+  workspaceName?: string | null;
   details: Array<{ label: string; value: string }>;
 }
 
@@ -187,6 +189,10 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
   });
 
   const rows: Array<[string, string]> = [
+    ...(data.groupName
+      ? ([["Group", data.groupName]] as Array<[string, string]>)
+      : []),
+    ["Workspace", data.workspaceName ?? data.schoolName],
     ["Student", data.studentName],
     ["Paid by", data.payerName],
     ["Paid on", data.paidAt.toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })],
