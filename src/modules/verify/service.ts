@@ -33,6 +33,13 @@ export interface PublicReceipt {
   /** The group the collection is filed under, when it has one. */
   group_name: string | null;
   group_logo_url: string | null;
+  /** How the money was split. Amounts are in naira, as stored. */
+  breakdown: {
+    collection: number;
+    paystack_fee: number;
+    jeneviv_fee: number;
+    total: number;
+  };
   details: Array<{ label: string; value: string }>;
 }
 
