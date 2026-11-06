@@ -102,6 +102,13 @@ async function loadReceipt(reference: string): Promise<{
     workspace_name: merchant.displayName ?? merchant.merchantCode,
     group_name: group?.name ?? null,
     group_logo_url: group?.logoUrl ?? null,
+    // How the money was split. Amounts are in naira, as stored.
+    breakdown: {
+      collection: tx.amount,
+      paystack_fee: tx.gatewayFee,
+      jeneviv_fee: tx.platformFee,
+      total: tx.totalCharged,
+    },
     // The receipt page renders Collection, Group and Workspace itself, so these
     // rows only carry the collection's own fields.
     details: [
