@@ -33,18 +33,24 @@ export interface PublicReceipt {
   /** The group the collection is filed under, when it has one. */
   group_name: string | null;
   group_logo_url: string | null;
-  /** How the money was split. Amounts are in naira, as stored. */
+  details: Array<{ label: string; value: string }>;
+  /** How the money was split, in naira. */
   breakdown: {
     collection: number;
     paystack_fee: number;
     jeneviv_fee: number;
     total: number;
   };
-  details: Array<{ label: string; value: string }>;
 }
 
 function verifyUrl(reference: string): string {
-  return `${env.APP_PUBLIC_URL.replace(/\/+$/, "")}/verify/${encodeURIComponent(reference)}`;
+  const base = env.APP_PUBLIC_URL.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(base)) {
+    console.error(
+      "[receipt] APP_PUBLIC_URL points at localhost in production. Set it to the hosted webapp URL, or verification links will not work.",
+    );
+  }
+  return `${base}/verify/${encodeURIComponent(reference)}`;
 }
 
 async function loadReceipt(reference: string): Promise<{
