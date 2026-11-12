@@ -379,6 +379,8 @@ async function handleChargeSuccess(
         status: "success",
         paidAt: event.paidAt,
         gatewayId: event.gatewayId,
+        // What actually arrived, so an overpayment can be seen against the amount requested.
+        amountReceived: receivedNaira,
         updatedAt: new Date(),
         ...(holdsFunds
           ? {

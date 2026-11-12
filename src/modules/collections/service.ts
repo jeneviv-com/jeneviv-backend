@@ -1,3 +1,5 @@
+import { env } from "../../env.js";
+import { computeCharge } from "../../lib/fees.js";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import {
@@ -456,6 +458,12 @@ export async function getCollectionByShortCode(
   fields: CollectionField[];
   group: CollectionGroup | null;
   payee: CollectionPayee;
+  pricing: {
+    amount: number;
+    platform_fee: number;
+    gateway_fee: number;
+    total: number;
+  };
 }> {
   const collection = await db.query.collections.findFirst({
     where: eq(collections.shortCode, shortCode),
@@ -495,5 +503,14 @@ export async function getCollectionByShortCode(
     bank_verified: Boolean(merchant?.bankVerifiedAt),
   };
 
-  return { collection, fields, group: await loadGroup(collection.groupId), payee };
+  // The same figures the server charges at payment, so the payer sees them before paying.
+  const charge = computeCharge(collection.amount, env.DEFAULT_GATEWAY === "paystack" ? "paystack" : "other");
+  const pricing = {
+    amount: charge.amount,
+    platform_fee: charge.platformFee,
+    gateway_fee: charge.gatewayFee,
+    total: charge.total,
+  };
+
+  return { collection, fields, group: await loadGroup(collection.groupId), payee, pricing };
 }
