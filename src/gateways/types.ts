@@ -1,4 +1,4 @@
-export type GatewayName = "flutterwave" | "paystack" | "monnify";
+export type GatewayName = "flutterwave" | "paystack" | "monnify" | "paga";
 
 export interface EnsureCustomerArgs {
   uid: string;
@@ -16,6 +16,8 @@ export interface CreateVirtualAccountArgs {
   /** Payer email — required by gateways that charge by email (Paystack). */
   customerEmail?: string;
   customerName?: string;
+  /** Payer phone. Paga's payment request includes it in the signed body. */
+  customerPhone?: string;
   /** Monnify reserved accounts require the payer's NIN. */
   customerNin?: string;
   /** Merchant split destination (Paystack subaccount code). */

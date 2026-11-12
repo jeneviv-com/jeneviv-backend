@@ -116,6 +116,15 @@ export const env = {
   CLOUDINARY_API_KEY: (process.env.CLOUDINARY_API_KEY ?? "").trim(),
   CLOUDINARY_API_SECRET: (process.env.CLOUDINARY_API_SECRET ?? "").trim(),
 
+  // Paga Collect API. Public/secret keys authenticate the request; the hash key
+  // signs it. Sandbox lives on beta-collect.paga.com.
+  PAGA_PUBLIC_KEY: process.env.PAGA_PUBLIC_KEY ?? "",
+  PAGA_SECRET_KEY: process.env.PAGA_SECRET_KEY ?? "",
+  PAGA_HASH_KEY: process.env.PAGA_HASH_KEY ?? "",
+  PAGA_BASE_URL: optional("PAGA_BASE_URL", "https://collect.paga.com"),
+  // Where Paga posts payment-request notifications. Defaults to this API.
+  PAGA_CALLBACK_URL: optional("PAGA_CALLBACK_URL", ""),
+
   RESEND_API_KEY: process.env.RESEND_API_KEY ?? "",
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL ?? "",
 

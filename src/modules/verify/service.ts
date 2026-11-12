@@ -23,6 +23,8 @@ export interface PublicReceipt {
   payer_name: string;
   amount: number;
   currency: string;
+  /** When the payer started this payment, before the gateway confirmed it. */
+  started_at: string;
   paid_at: string;
   nin_verified: boolean;
   bank_verified: boolean;
@@ -34,10 +36,23 @@ export interface PublicReceipt {
   group_name: string | null;
   group_logo_url: string | null;
   details: Array<{ label: string; value: string }>;
+  /** How the money was split, in naira. */
+  breakdown: {
+    collection: number;
+    paystack_fee: number;
+    jeneviv_fee: number;
+    total: number;
+  };
 }
 
 function verifyUrl(reference: string): string {
-  return `${env.APP_PUBLIC_URL.replace(/\/+$/, "")}/verify/${encodeURIComponent(reference)}`;
+  const base = env.APP_PUBLIC_URL.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(base)) {
+    console.error(
+      "[receipt] APP_PUBLIC_URL points at localhost in production. Set it to the hosted webapp URL, or verification links will not work.",
+    );
+  }
+  return `${base}/verify/${encodeURIComponent(reference)}`;
 }
 
 async function loadReceipt(reference: string): Promise<{
@@ -94,6 +109,7 @@ async function loadReceipt(reference: string): Promise<{
     payer_name: payer?.name ?? "Payer",
     amount: tx.amount,
     currency: tx.currency,
+    started_at: tx.createdAt.toISOString(),
     paid_at: (tx.paidAt ?? tx.createdAt).toISOString(),
     nin_verified: Boolean(merchant.ninVerifiedAt),
     bank_verified: Boolean(merchant.bankVerifiedAt),
@@ -102,6 +118,13 @@ async function loadReceipt(reference: string): Promise<{
     workspace_name: merchant.displayName ?? merchant.merchantCode,
     group_name: group?.name ?? null,
     group_logo_url: group?.logoUrl ?? null,
+    // How the money was split. Amounts are in naira, as stored.
+    breakdown: {
+      collection: tx.amount,
+      paystack_fee: tx.gatewayFee,
+      jeneviv_fee: tx.platformFee,
+      total: tx.totalCharged,
+    },
     // The receipt page renders Collection, Group and Workspace itself, so these
     // rows only carry the collection's own fields.
     details: [
@@ -134,6 +157,13 @@ export async function renderPublicReceiptPdf(
     ninVerified: receipt.nin_verified,
     bankVerified: receipt.bank_verified,
     verifyUrl: receipt.verify_url,
+    startedAt: new Date(receipt.started_at),
+    breakdown: {
+      collection: receipt.breakdown.collection,
+      paystackFee: receipt.breakdown.paystack_fee,
+      jenevivFee: receipt.breakdown.jeneviv_fee,
+      total: receipt.breakdown.total,
+    },
     groupName: receipt.group_name,
     workspaceName: receipt.workspace_name,
     details: receipt.details.filter((d) => d.label !== "Collection"),

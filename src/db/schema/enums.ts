@@ -60,4 +60,4 @@ export type RefundStatus =
   | "success"
   | "failed";
 
-export type GatewayName = "flutterwave" | "paystack" | "monnify";
+export type GatewayName = "flutterwave" | "paystack" | "monnify" | "paga";

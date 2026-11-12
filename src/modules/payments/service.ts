@@ -368,12 +368,17 @@ export async function initPayment(
     100,
   );
 
+  // Paga signs the payer's phone number into the request body. Every other
+  // gateway ignores it.
+  const payerPhone = validatedValues.find((v) => v.type === "phone")?.value;
+
   const createVirtual = (code: string | undefined) =>
     gateway.createVirtualAccount({
       reference,
       customerId,
       customerEmail: effectiveUser.email,
       customerName: effectiveUser.name,
+      customerPhone: payerPhone,
       amount: toMinor(breakdown.total, currency),
       currency,
       narration,

@@ -4,6 +4,8 @@ import { bearer } from "better-auth/plugins"; // FIX: new import
 import { db } from "./db/index.js";
 import { accounts, sessions, users, verifications } from "./db/schema.js";
 import { env } from "./env.js";
+import { sendEmail } from "./lib/email.js";
+import { passwordResetEmail, resetPasswordUrl } from "./lib/password-reset-email.js";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3001";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
@@ -29,6 +31,25 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // Reset links are single-use, expire after an hour, and signing in
+    // elsewhere is ended by a reset so a stolen session cannot survive it.
+    resetPasswordTokenExpiresIn: 60 * 60,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, token }) => {
+      const url = resetPasswordUrl(token);
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Reset your Jeneviv password",
+          html: passwordResetEmail({ name: user.name, url }),
+        });
+      } catch (error) {
+        console.error("[AUTH] Could not send the password reset email", error);
+        throw new Error(
+          "We could not send the reset email. Please try again in a moment.",
+        );
+      }
+    },
   },
   user: {
     additionalFields: {

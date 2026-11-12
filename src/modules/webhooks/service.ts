@@ -11,6 +11,10 @@ import {
   getPaystackEventId,
   getPaystackEventType,
 } from "../../gateways/paystack/webhook.js";
+import {
+  getPagaEventId,
+  getPagaEventType,
+} from "../../gateways/paga/webhook.js";
 import { getGateway } from "../../gateways/registry.js";
 import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
@@ -179,6 +183,107 @@ export async function ingestPaystackWebhook(
     rawBody,
     headers,
   );
+}
+
+/**
+ * Paga's payment-request callback. Unlike the shared pipeline above, the hash is
+ * not treated as the gate: Paga does not publish the field order for every
+ * callback version, and a callback alone should never move money. The event is
+ * recorded (with whether its hash verified), then the request is re-read from
+ * POST /status and only that answer is applied.
+ */
+export async function ingestPagaWebhook(
+  rawBody: Buffer,
+  headers: Record<string, string | string[] | undefined>,
+): Promise<{ result: IngestResult; httpStatus: number }> {
+  let payload: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(rawBody.toString("utf8"));
+    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+    payload = parsed as Record<string, unknown>;
+  } catch {
+    return {
+      result: { status: "invalid", message: "Invalid JSON" },
+      httpStatus: 400,
+    };
+  }
+
+  const reference = String(
+    payload.externalReferenceNumber ?? payload.referenceNumber ?? "",
+  ).trim();
+  const eventId = getPagaEventId(payload);
+  if (!reference || !eventId) {
+    return {
+      result: { status: "invalid", message: "Missing payment reference" },
+      httpStatus: 400,
+    };
+  }
+
+  const gateway = getGateway("paga");
+  const signatureVerified = gateway.verifyWebhookSignature(rawBody, headers);
+
+  const existing = await db.query.webhookEvents.findFirst({
+    where: (e, { and: andf, eq: eqf }) =>
+      andf(eqf(e.gateway, "paga"), eqf(e.eventId, eventId)),
+  });
+  if (existing) {
+    return {
+      result: { status: "duplicate", message: "Event already received" },
+      httpStatus: 200,
+    };
+  }
+
+  const eventRowId = newId();
+  await db.insert(webhookEvents).values({
+    id: eventRowId,
+    gateway: "paga",
+    eventId,
+    eventType: getPagaEventType(payload) ?? "unknown",
+    signatureVerified,
+    payload,
+  });
+
+  try {
+    const normalized = gateway.parseWebhookEvent(payload);
+
+    if (normalized?.type === "charge.success") {
+      const verified = await gateway.verifyPayment?.(normalized.reference);
+      if (verified?.status === "success") {
+        await applyVerifiedCharge({
+          reference: normalized.reference,
+          gatewayId: verified.gatewayId || normalized.gatewayId,
+          amountPaidMinor: verified.amountPaidMinor || normalized.amountPaid,
+          gatewayFeeMinor: verified.gatewayFeeMinor || normalized.gatewayFee,
+          currency: verified.currency || normalized.currency,
+          paidAt: verified.paidAt ?? normalized.paidAt,
+        });
+      } else if (verified?.status === "failed") {
+        await processNormalizedEvent({
+          type: "charge.failed",
+          gatewayId: verified.gatewayId || normalized.gatewayId,
+          reference: normalized.reference,
+          reason: "Paga reports this payment as failed",
+          raw: payload,
+        });
+      }
+    } else if (normalized) {
+      await processNormalizedEvent(normalized);
+    }
+
+    await db
+      .update(webhookEvents)
+      .set({ processedAt: new Date() })
+      .where(eq(webhookEvents.id, eventRowId));
+    return { result: { status: "ok" }, httpStatus: 200 };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await db
+      .update(webhookEvents)
+      .set({ processingError: message })
+      .where(eq(webhookEvents.id, eventRowId));
+    // A 5xx makes Paga retry, which is what we want for a transient failure.
+    return { result: { status: "invalid", message }, httpStatus: 500 };
+  }
 }
 
 async function processNormalizedEvent(event: NormalizedEvent): Promise<void> {
