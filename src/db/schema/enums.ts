@@ -60,4 +60,13 @@ export type RefundStatus =
   | "success"
   | "failed";
 
+/**
+ * Roles inside a workspace (the `merchants` table). `owner` is the account that
+ * applied and holds settlement; `admin` runs day-to-day but cannot move money
+ * to a different bank account; `collector` creates and records collections;
+ * `viewer` reads only.
+ */
+export type WorkspaceRole = "owner" | "admin" | "collector" | "viewer";
+export type WorkspaceMemberStatus = "active" | "removed";
+
 export type GatewayName = "flutterwave" | "paystack" | "monnify" | "paga";

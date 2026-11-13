@@ -13,6 +13,7 @@ import { recordAudit } from "../../lib/audit.js";
 import { destroyLogo, isCloudinaryUrlOnOurCloud } from "../../lib/cloudinary.js";
 import { newId, newMerchantCode } from "../../lib/short-code.js";
 import { HttpError } from "../../middleware/error.js";
+import { listWorkspacesForUser } from "../workspaces/service.js";
 import type {
   ApplyMerchantInput,
   CreateBankAccountInput,
@@ -78,14 +79,20 @@ export async function findMerchantByUser(
 
 export async function getMerchantForUser(userId: string): Promise<Merchant> {
   const merchant = await findMerchantByUser(userId);
-  if (!merchant) {
-    throw new HttpError(
-      404,
-      "merchant_not_found",
-      "No merchant account exists for this user",
-    );
-  }
-  return merchant;
+  if (merchant) return merchant;
+
+  // An invited teammate does not own a merchant row, so resolve the workspace
+  // they were given access to. Routes that change settlement or identity are
+  // separately gated by role; this only decides which workspace they see.
+  const memberships = await listWorkspacesForUser(userId);
+  const first = memberships[0];
+  if (first) return first.workspace;
+
+  throw new HttpError(
+    404,
+    "merchant_not_found",
+    "No merchant account exists for this user",
+  );
 }
 
 export async function applyAsMerchant(

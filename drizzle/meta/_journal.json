@@ -71,6 +71,13 @@
       "when": 1793300000000,
       "tag": "0009_amount_received",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794586296060,
+      "tag": "0010_glorious_kid_colt",
+      "breakpoints": true
     }
   ]
 }

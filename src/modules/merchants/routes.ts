@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { HttpError } from "../../middleware/error.js";
 import { requireAuth } from "../../middleware/require-auth.js";
+import { requireRole } from "../../middleware/require-merchant.js";
 import { validate } from "../../middleware/validate.js";
 import {
   applyMerchantSchema,
@@ -55,10 +56,12 @@ merchantsRouter.get("/me", async (req, res, next) => {
 
 merchantsRouter.patch(
   "/me/settings",
+  // Admins can rename the workspace; only the owner decides where money lands.
+  requireRole("admin"),
   validate(updateMerchantSettingsSchema),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const updated = await updateMerchantSettings(merchant, req.body);
       res.json({ merchant: updated });
     } catch (err) {
@@ -78,10 +81,11 @@ merchantsRouter.get("/me/kyc", async (req, res, next) => {
 
 merchantsRouter.post(
   "/me/kyc/nin",
+  requireRole("owner"),
   validate(submitNinSchema),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const kyc = await verifyNin(merchant, req.body.nin);
       res.json({ kyc });
     } catch (err) {
@@ -92,10 +96,11 @@ merchantsRouter.post(
 
 merchantsRouter.post(
   "/me/kyc/bank",
+  requireRole("owner"),
   validate(verifyBankSchema),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const kyc = await verifyKycBank(merchant, req.body);
       res.json({ kyc });
     } catch (err) {
@@ -106,10 +111,11 @@ merchantsRouter.post(
 
 merchantsRouter.patch(
   "/me/treasurer",
+  requireRole("owner"),
   validate(setTreasurerSchema),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const kyc = await setTreasurer(merchant, req.body);
       res.json({ kyc });
     } catch (err) {
@@ -130,10 +136,12 @@ merchantsRouter.get("/me/bank-accounts", async (req, res, next) => {
 
 merchantsRouter.post(
   "/me/bank-accounts",
+  // Settlement destinations are owner-only: an admin cannot redirect payouts.
+  requireRole("owner"),
   validate(createBankAccountSchema),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const account = await createMerchantBankAccount(merchant, req.body);
       res.status(201).json({ bank_account: account });
     } catch (err) {
@@ -144,10 +152,11 @@ merchantsRouter.post(
 
 merchantsRouter.delete(
   "/me/bank-accounts/:id",
+  requireRole("owner"),
   validate(bankAccountIdParamSchema, "params"),
   async (req, res, next) => {
     try {
-      const merchant = await getMerchantForUser(req.user!.id);
+      const merchant = req.merchant!;
       const { id } = req.params as { id: string };
       if (!id) throw new HttpError(400, "bad_request", "id is required");
       await deleteMerchantBankAccount(merchant, id);

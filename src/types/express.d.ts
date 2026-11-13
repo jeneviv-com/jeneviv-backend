@@ -1,3 +1,4 @@
+import type { WorkspaceRole } from "../db/schema/enums.js";
 import type { Merchant } from "../db/schema/merchants.js";
 import type { User } from "../db/schema/auth.js";
 
@@ -7,6 +8,7 @@ declare global {
       user?: User;
       sessionId?: string;
       merchant?: Merchant;
+      workspaceRole?: WorkspaceRole;
     }
   }
 }

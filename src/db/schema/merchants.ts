@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   jsonb,
   numeric,
   pgTable,
@@ -97,7 +98,9 @@ export const merchants = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("merchants_user_id_unique").on(table.userId),
+    // Not unique: one person can own more than one workspace. Access to each
+    // workspace is decided by `workspace_members`, not by this column.
+    index("merchants_user_id_idx").on(table.userId),
     uniqueIndex("merchants_merchant_code_unique").on(table.merchantCode),
   ],
 );
