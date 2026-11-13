@@ -119,6 +119,46 @@ export function publicIdFromUrl(url: string): string | null {
 }
 
 /**
+ * Upload a small image the server already holds in memory, instead of letting
+ * the browser post straight to Cloudinary. Used for avatars, where the API has
+ * to enforce its own size and type limits before anything is stored.
+ */
+export async function uploadImageBuffer(
+  buffer: Buffer,
+  args: { folder: string; mimeType: string },
+): Promise<{ url: string; publicId: string }> {
+  const { cloudName, apiKey, apiSecret } = ensureConfigured();
+  if (!FOLDER_RE.test(args.folder)) throw new Error("Invalid folder name");
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = sign({ folder: args.folder, timestamp }, apiSecret);
+
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(buffer)], { type: args.mimeType }));
+  form.append("api_key", apiKey);
+  form.append("timestamp", String(timestamp));
+  form.append("folder", args.folder);
+  form.append("signature", signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    { method: "POST", body: form },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    secure_url?: string;
+    public_id?: string;
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.secure_url || !body.public_id) {
+    throw new Error(
+      `Cloudinary upload failed: ${body.error?.message ?? response.status}`,
+    );
+  }
+  return { url: body.secure_url, publicId: body.public_id };
+}
+
+/**
  * Best-effort delete of a logo we uploaded. Never throws: a failed cleanup must
  * not block a save. Failures are logged so they can be removed by hand later.
  */

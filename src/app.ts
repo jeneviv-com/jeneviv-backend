@@ -21,6 +21,7 @@ import { groupsRouter } from "./modules/groups/routes.js";
 import { jobsRouter } from "./modules/jobs/routes.js";
 import { merchantsRouter } from "./modules/merchants/routes.js";
 import { paymentsRouter } from "./modules/payments/routes.js";
+import { profileRouter } from "./modules/profile/routes.js";
 import { payoutsRouter } from "./modules/payouts/routes.js";
 import { refundsRouter } from "./modules/refunds/routes.js";
 import { templatesRouter } from "./modules/templates/routes.js";
@@ -70,6 +71,7 @@ app.use("/api/withdrawals", withdrawalsRouter);
 app.use("/api/approvals", approvalsRouter);
 app.use("/api/verify", verifyRouter);
 app.use("/api/uploads", uploadsRouter);
+app.use("/api/profile", profileRouter);
 app.use("/api/jobs", jobsRouter);
 
 app.use(notFoundHandler);
