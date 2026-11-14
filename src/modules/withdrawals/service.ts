@@ -4,6 +4,13 @@ import { withdrawals, type Withdrawal } from "../../db/schema/withdrawals.js";
 import { recordAudit } from "../../lib/audit.js";
 
 /**
+ * Withdrawals are not a user-facing feature yet: there is no way to request or
+ * approve one, because escrow is off and the request/approval flow was never
+ * implemented. These two helpers stay because the gateway webhooks still need to
+ * reconcile a transfer if one ever exists in the table.
+ */
+
+/**
  * Marks a withdrawal as completed when the gateway confirms the transfer succeeded.
  * Called by webhook handlers.
  */
@@ -86,97 +93,4 @@ export async function markWithdrawalFailedByRef(
   });
 
   return updated;
-}
-
-import type { Merchant } from "../../db/schema/merchants.js";
-import type { User } from "../../db/schema/auth.js";
-import { HttpError } from "../../middleware/error.js";
-import type { CreateWithdrawalInput } from "./schemas.js";
-
-/**
- * Creates a new withdrawal request for a merchant.
- * The withdrawal stays pending until the treasurer approves it.
- */
-export async function createWithdrawal(
-  merchant: Merchant,
-  _user: User,
-  _input: CreateWithdrawalInput,
-): Promise<Withdrawal> {
-  if (!merchant.escrowEnabled) {
-    throw new HttpError(403, "escrow_disabled", "Escrow withdrawals are not enabled for this workspace");
-  }
-  throw new HttpError(501, "not_implemented", "Withdrawal creation not yet implemented");
-}
-
-/**
- * Gets a withdrawal for a merchant by ID.
- */
-export async function getWithdrawal(
-  merchant: Merchant,
-  withdrawalId: string,
-): Promise<Withdrawal> {
-  const withdrawal = await db.query.withdrawals.findFirst({
-    where: and(
-      eq(withdrawals.id, withdrawalId),
-      eq(withdrawals.merchantId, merchant.id),
-    ),
-  });
-  
-  if (!withdrawal) {
-    throw new HttpError(404, "not_found", "Withdrawal not found");
-  }
-  
-  return withdrawal;
-}
-
-/**
- * Lists withdrawals for a merchant.
- */
-export async function listWithdrawals(
-  merchant: Merchant,
-  limit: number = 50,
-): Promise<Withdrawal[]> {
-  return db.query.withdrawals.findMany({
-    where: eq(withdrawals.merchantId, merchant.id),
-    orderBy: (w, { desc }) => [desc(w.createdAt)],
-    limit: Math.min(limit, 100),
-  });
-}
-
-/**
- * Gets the approval summary for a withdrawal by approval token.
- */
-export async function getApprovalSummary(
-  _approvalToken: string,
-): Promise<{
-  id: string;
-  merchant_name: string;
-  amount: string;
-  currency: string;
-  source: string;
-  treasurer_name: string;
-  requested_at: Date;
-  status: string;
-}> {
-  throw new HttpError(501, "not_implemented", "Approval summary not yet implemented");
-}
-
-/**
- * Approves a withdrawal with the OTP sent to the treasurer.
- */
-export async function approveWithdrawal(
-  _approvalToken: string,
-  _otp: string,
-): Promise<{ success: true; withdrawal_id: string }> {
-  throw new HttpError(501, "not_implemented", "Withdrawal approval not yet implemented");
-}
-
-/**
- * Rejects a withdrawal request.
- */
-export async function rejectWithdrawal(
-  _approvalToken: string,
-  _reason?: string,
-): Promise<{ success: true }> {
-  throw new HttpError(501, "not_implemented", "Withdrawal rejection not yet implemented");
 }
