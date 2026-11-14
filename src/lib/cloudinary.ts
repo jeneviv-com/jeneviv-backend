@@ -123,21 +123,37 @@ export function publicIdFromUrl(url: string): string | null {
  * the browser post straight to Cloudinary. Used for avatars, where the API has
  * to enforce its own size and type limits before anything is stored.
  */
+/** True when the three Cloudinary settings are present. */
+export function cloudinaryConfigured(): boolean {
+  return Boolean(
+    env.CLOUDINARY_CLOUD_NAME &&
+      env.CLOUDINARY_API_KEY &&
+      env.CLOUDINARY_API_SECRET,
+  );
+}
+
 export async function uploadImageBuffer(
   buffer: Buffer,
-  args: { folder: string; mimeType: string },
+  args: { folder: string; mimeType: string; transformation?: string },
 ): Promise<{ url: string; publicId: string }> {
   const { cloudName, apiKey, apiSecret } = ensureConfigured();
   if (!FOLDER_RE.test(args.folder)) throw new Error("Invalid folder name");
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const signature = sign({ folder: args.folder, timestamp }, apiSecret);
+  // A transformation has to be signed too, or Cloudinary rejects the upload.
+  const signedParams: Record<string, string | number> = {
+    folder: args.folder,
+    timestamp,
+  };
+  if (args.transformation) signedParams.transformation = args.transformation;
+  const signature = sign(signedParams, apiSecret);
 
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(buffer)], { type: args.mimeType }));
   form.append("api_key", apiKey);
   form.append("timestamp", String(timestamp));
   form.append("folder", args.folder);
+  if (args.transformation) form.append("transformation", args.transformation);
   form.append("signature", signature);
 
   const response = await fetch(
