@@ -36,4 +36,11 @@ CREATE UNIQUE INDEX "workspace_invites_token_hash_unique" ON "workspace_invites"
 CREATE INDEX "workspace_invites_workspace_idx" ON "workspace_invites" USING btree ("workspace_id","email");--> statement-breakpoint
 CREATE UNIQUE INDEX "workspace_members_workspace_user_unique" ON "workspace_members" USING btree ("workspace_id","user_id");--> statement-breakpoint
 CREATE INDEX "workspace_members_user_idx" ON "workspace_members" USING btree ("user_id","status");--> statement-breakpoint
-CREATE INDEX "merchants_user_id_idx" ON "merchants" USING btree ("user_id");
+CREATE INDEX "merchants_user_id_idx" ON "merchants" USING btree ("user_id");--> statement-breakpoint
+-- Every existing workspace's owner needs a membership row, otherwise their
+-- People list is empty and they cannot invite anyone. Idempotent on re-run.
+INSERT INTO "workspace_members" ("id", "workspace_id", "user_id", "role", "status", "created_at", "updated_at")
+SELECT gen_random_uuid()::text, m."id", m."user_id", 'owner', 'active', now(), now()
+FROM "merchants" m
+WHERE m."user_id" IS NOT NULL
+ON CONFLICT ("workspace_id", "user_id") DO NOTHING;

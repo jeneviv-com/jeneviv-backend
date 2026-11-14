@@ -5,6 +5,7 @@ import { merchants } from "../../db/schema/merchants.js";
 import type { Merchant } from "../../db/schema/merchants.js";
 import type { WorkspaceRole } from "../../db/schema/enums.js";
 import { HttpError } from "../../middleware/error.js";
+import { newId } from "../../lib/short-code.js";
 
 /**
  * Workspace access rules, in one place.
@@ -63,6 +64,28 @@ export async function listWorkspacesForUser(userId: string) {
  * a filter over the user's own memberships, never as a direct lookup, so passing
  * a stranger's workspace id yields "not found" rather than a peek at their data.
  */
+/**
+ * Makes sure the account that owns a workspace has a membership row for it.
+ *
+ * Everyone else's access is a row, so without this an owner is a special case
+ * in every query: their workspace would show no members and the invite form
+ * would treat them as a viewer. The unique index turns repeats into a no-op.
+ */
+async function ensureOwnerMembership(workspaceId: string, ownerUserId: string) {
+  await db
+    .insert(workspaceMembers)
+    .values({
+      id: newId(),
+      workspaceId,
+      userId: ownerUserId,
+      role: "owner",
+      status: "active",
+    })
+    .onConflictDoNothing({
+      target: [workspaceMembers.workspaceId, workspaceMembers.userId],
+    });
+}
+
 export async function activeWorkspace(
   userId: string,
   requestedId?: string | null,
@@ -83,11 +106,10 @@ export async function activeWorkspace(
 
   const first = memberships[0];
   if (first) {
-    return {
-      workspace: first.workspace,
-      role: first.role,
-      isOwner: first.role === "owner" || first.workspace.userId === userId,
-    };
+    const isOwner =
+      first.role === "owner" || first.workspace.userId === userId;
+    if (isOwner) await ensureOwnerMembership(first.workspace.id, userId);
+    return { workspace: first.workspace, role: first.role, isOwner };
   }
 
   // Accounts created before memberships existed still resolve through the
@@ -102,6 +124,7 @@ export async function activeWorkspace(
       "No workspace found for this user",
     );
   }
+  await ensureOwnerMembership(owned.id, userId);
   return { workspace: owned, role: "owner", isOwner: true };
 }
 
