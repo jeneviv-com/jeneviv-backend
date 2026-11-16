@@ -47,10 +47,21 @@ function safeLogValue(
 ): string | null {
   if (typeof value !== "string") return null;
 
-  return value
-    .replaceAll(nin, "[REDACTED_NIN]")
-    .replaceAll(env.VERIPINE_API_KEY, "[REDACTED_API_KEY]")
-    .slice(0, 500);
+  let safeValue = value;
+
+  if (nin) {
+    safeValue = safeValue
+      .split(nin)
+      .join("[REDACTED_NIN]");
+  }
+
+  if (env.VERIPINE_API_KEY) {
+    safeValue = safeValue
+      .split(env.VERIPINE_API_KEY)
+      .join("[REDACTED_API_KEY]");
+  }
+
+  return safeValue.slice(0, 500);
 }
 
 export async function lookupNin(nin: string): Promise<NinIdentity> {
@@ -104,9 +115,13 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     });
   } catch (error) {
     console.error("[Veripine] Network request failed", {
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorName: error instanceof Error
+        ? error.name
+        : "UnknownError",
       errorMessage: safeLogValue(
-        error instanceof Error ? error.message : "Unknown network error",
+        error instanceof Error
+          ? error.message
+          : "Unknown network error",
         nin,
       ),
     });
@@ -127,7 +142,9 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   } catch (error) {
     console.error("[Veripine] Could not read provider response", {
       status: response.status,
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorName: error instanceof Error
+        ? error.name
+        : "UnknownError",
     });
 
     throw new HttpError(
