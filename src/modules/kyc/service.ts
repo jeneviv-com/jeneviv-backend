@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { merchants, merchantBankAccounts, type Merchant } from "../../db/schema/merchants.js";
 import { env } from "../../env.js";
-import { lookupNin } from "../../lib/dojah.js";
+import { lookupNin } from "../../lib/veripine.js";
 import { hashNin } from "../../lib/secrets.js";
 import { namesMatch } from "../../lib/names.js";
 import { recordAudit } from "../../lib/audit.js";

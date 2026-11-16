@@ -86,9 +86,8 @@ export const env = {
 
   // Identity + escrow providers. They are optional so the existing gateway
   // keeps working, but KYC and two-man withdrawals switch on once configured.
-  DOJAH_APP_ID: process.env.DOJAH_APP_ID ?? "",
-  DOJAH_SECRET_KEY: process.env.DOJAH_SECRET_KEY ?? "",
-  DOJAH_BASE_URL: optional("DOJAH_BASE_URL", "https://api.dojah.io"),
+  VERIPINE_API_KEY: process.env.VERIPINE_API_KEY ?? "",
+  VERIPINE_BASE_URL: optional("VERIPINE_BASE_URL", "https://veripine.com"),
 
   MONNIFY_API_KEY: process.env.MONNIFY_API_KEY ?? "",
   MONNIFY_SECRET_KEY: process.env.MONNIFY_SECRET_KEY ?? "",
@@ -103,7 +102,7 @@ export const env = {
   // Public dashboard origin used to build treasurer approval links.
   APP_PUBLIC_URL: optional("APP_PUBLIC_URL", "http://localhost:5173"),
   // Local/dev escape hatch: lets the suite exercise provider flows without
-  // live Dojah/Paystack/Monnify keys. Never enable in production.
+  // live Veripine/Paystack/Monnify keys. Never enable in production.
   ALLOW_PROVIDER_MOCKS: optional("ALLOW_PROVIDER_MOCKS", "false") === "true",
   KYC_MOCK_LEGAL_NAME: optional("KYC_MOCK_LEGAL_NAME", "Test Merchant"),
   KYC_MOCK_ACCOUNT_NAME: optional("KYC_MOCK_ACCOUNT_NAME", "Test Merchant"),
