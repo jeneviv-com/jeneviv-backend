@@ -1,3 +1,4 @@
+
 import { env } from "../env.js";
 import { HttpError } from "../middleware/error.js";
 
@@ -25,8 +26,8 @@ interface VeripineData {
 
 interface VeripineResponse {
   status?: unknown;
-  message?: string;
-  code?: number;
+  message?: unknown;
+  code?: unknown;
   data?: VeripineData;
 }
 
@@ -35,7 +36,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function optionalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : null;
+}
+
+function safeLogValue(
+  value: unknown,
+  nin: string,
+): string | null {
+  if (typeof value !== "string") return null;
+
+  return value
+    .replaceAll(nin, "[REDACTED_NIN]")
+    .replaceAll(env.VERIPINE_API_KEY, "[REDACTED_API_KEY]")
+    .slice(0, 500);
 }
 
 export async function lookupNin(nin: string): Promise<NinIdentity> {
@@ -43,18 +58,22 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     if (env.ALLOW_PROVIDER_MOCKS) {
       const fullName = env.KYC_MOCK_LEGAL_NAME.trim();
       const parts = fullName.split(/\s+/);
+
       return {
         firstName: parts[0] ?? "",
         middleName: parts.slice(1, -1).join(" "),
-        lastName: parts.length > 1 ? (parts[parts.length - 1] ?? "") : "",
+        lastName: parts.length > 1
+          ? parts[parts.length - 1] ?? ""
+          : "",
         fullName,
         dateOfBirth: null,
         phoneNumber: null,
         photo: null,
         provider: "mock",
-        raw: { nin, mock: true },
+        raw: { mock: true },
       };
     }
+
     throw new HttpError(
       503,
       "kyc_not_configured",
@@ -62,21 +81,36 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     );
   }
 
-  const url = new URL("/api/nin-verification", env.VERIPINE_BASE_URL);
+  const url = new URL(
+    "/api/nin-verification",
+    env.VERIPINE_BASE_URL,
+  );
 
   let response: Response;
+
   try {
     response = await fetch(url, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": env.VERIPINE_API_KEY,
         Accept: "application/json",
       },
-      method: "POST",
-      body: JSON.stringify({ nin, consent: true }),
-      signal: AbortSignal.timeout(20_000),
+      body: JSON.stringify({
+        nin,
+        consent: true,
+      }),
+      signal: AbortSignal.timeout(30000),
     });
-  } catch {
+  } catch (error) {
+    console.error("[Veripine] Network request failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: safeLogValue(
+        error instanceof Error ? error.message : "Unknown network error",
+        nin,
+      ),
+    });
+
     throw new HttpError(
       502,
       "kyc_provider_unreachable",
@@ -84,10 +118,36 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     );
   }
 
-  let parsedBody: unknown;
+  const contentType = response.headers.get("content-type");
+
+  let responseText: string;
+
   try {
-    parsedBody = await response.json();
+    responseText = await response.text();
+  } catch (error) {
+    console.error("[Veripine] Could not read provider response", {
+      status: response.status,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+
+    throw new HttpError(
+      502,
+      "kyc_failed",
+      "Could not read the identity provider response.",
+    );
+  }
+
+  let parsedBody: unknown;
+
+  try {
+    parsedBody = JSON.parse(responseText);
   } catch {
+    console.error("[Veripine] Invalid JSON response", {
+      status: response.status,
+      contentType,
+      responseLength: responseText.length,
+    });
+
     throw new HttpError(
       502,
       "kyc_failed",
@@ -96,6 +156,11 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   }
 
   if (!isRecord(parsedBody)) {
+    console.error("[Veripine] Unexpected response format", {
+      status: response.status,
+      contentType,
+    });
+
     throw new HttpError(
       502,
       "kyc_failed",
@@ -104,14 +169,30 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   }
 
   const body = parsedBody as VeripineResponse;
+
   if (!response.ok || body.status !== "success") {
-    if (response.status === 404 || body.code === 404) {
+    const providerMessage = safeLogValue(body.message, nin);
+
+    console.error("[Veripine] Provider rejected NIN verification", {
+      httpStatus: response.status,
+      providerStatus: body.status,
+      providerCode: body.code,
+      providerMessage,
+      contentType,
+    });
+
+    if (
+      response.status === 404 ||
+      body.code === 404 ||
+      body.code === "404"
+    ) {
       throw new HttpError(
         422,
         "nin_not_found",
         "No identity record was found for that NIN.",
       );
     }
+
     throw new HttpError(
       502,
       "kyc_failed",
@@ -120,6 +201,11 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   }
 
   if (!isRecord(body.data)) {
+    console.error("[Veripine] Successful response has no identity data", {
+      httpStatus: response.status,
+      providerStatus: body.status,
+    });
+
     throw new HttpError(
       502,
       "kyc_incomplete",
@@ -128,16 +214,29 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   }
 
   const entity = body.data;
+
   const firstName = optionalString(entity.firstname) ?? "";
   const middleName = optionalString(entity.middlename) ?? "";
+
   const lastName =
-    optionalString(entity.surname) ?? optionalString(entity.lastname) ?? "";
-  const fullName = [firstName, middleName, lastName]
+    optionalString(entity.surname) ??
+    optionalString(entity.lastname) ??
+    "";
+
+  const fullName = [
+    firstName,
+    middleName,
+    lastName,
+  ]
     .filter(Boolean)
     .join(" ")
     .trim();
 
   if (!fullName) {
+    console.error("[Veripine] Identity response contains no usable name", {
+      httpStatus: response.status,
+    });
+
     throw new HttpError(
       502,
       "kyc_incomplete",
