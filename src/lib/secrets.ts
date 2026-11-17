@@ -13,6 +13,10 @@ export function hashNin(nin: string): string {
   return createHash("sha256").update(`nin:${key()}:${nin}`).digest("hex");
 }
 
+export function hashBvn(bvn: string): string {
+  return createHash("sha256").update(`bvn:${key()}:${bvn}`).digest("hex");
+}
+
 export function newOpaqueToken(): string {
   return randomBytes(32).toString("base64url");
 }

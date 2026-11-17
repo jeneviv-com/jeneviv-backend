@@ -84,6 +84,147 @@ export function safeLogValue(value: unknown, sensitiveItems: string[] = []): str
   return safeValue.slice(0, 500);
 }
 
+interface ParsedIdentity {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  fullName: string;
+  dateOfBirth: string | null;
+  phoneNumber: string | null;
+  gender: string | null;
+  photo: string | null;
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = optionalString(record[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+/**
+ * Veripine sometimes nests the person record one level deeper than its docs
+ * show: `{ status, data: { status, message, data: { firstname, ... }, report_id } }`.
+ * Walk down `data` until we reach a record that is not itself an envelope.
+ * Returns null when an envelope carries no person record at all.
+ */
+export function unwrapIdentityRecord(
+  data: Record<string, unknown>,
+): Record<string, unknown> | null {
+  let current = data;
+  for (let depth = 0; depth < 3; depth += 1) {
+    const inner = current.data;
+    if (isRecord(inner)) {
+      current = inner;
+      continue;
+    }
+    if (Array.isArray(inner) && isRecord(inner[0])) {
+      current = inner[0];
+      continue;
+    }
+    if ("data" in current) return null;
+    break;
+  }
+  return current;
+}
+
+/**
+ * Turns a successful Veripine `data` payload into a normalised identity, or
+ * throws a clear HttpError. Shared by NIN and BVN so the mapping cannot drift.
+ */
+function parseIdentity(
+  data: Record<string, unknown>,
+  identifierType: "NIN" | "BVN",
+  identifierValue: string,
+  httpStatus: number,
+): ParsedIdentity {
+  const entity = unwrapIdentityRecord(data);
+
+  if (!entity) {
+    // Report the innermost envelope: that is where Veripine explains the miss.
+    let envelope = data;
+    while (isRecord(envelope.data)) envelope = envelope.data;
+    const innerMessage = safeLogValue(envelope.message, [identifierValue]) ?? "";
+    console.error(`[Veripine] ${identifierType} response envelope has no person record`, {
+      httpStatus,
+      innerStatus: envelope.status,
+      innerMessage,
+      dataKeys: Object.keys(data),
+    });
+    if (/not\s*found|no\s*record|invalid/i.test(innerMessage)) {
+      throw new HttpError(
+        422,
+        identifierType === "NIN" ? "nin_not_found" : "bvn_not_found",
+        `No identity record was found for that ${identifierType}.`,
+      );
+    }
+    throw new HttpError(
+      502,
+      "kyc_incomplete",
+      `The identity provider returned no record for that ${identifierType}.`,
+    );
+  }
+
+  // Veripine docs show lowercase (`firstname`, `surname`), but some endpoints
+  // return camelCase, snake_case or capitalised variants. Try them all.
+  const firstName =
+    firstString(entity, ["firstname", "firstName", "first_name", "Firstname", "FirstName"]) ?? "";
+  const middleName =
+    firstString(entity, ["middlename", "middleName", "middle_name", "Middlename", "MiddleName"]) ?? "";
+  const lastName =
+    firstString(entity, [
+      "surname",
+      "lastname",
+      "lastName",
+      "last_name",
+      "Surname",
+      "LastName",
+    ]) ?? "";
+
+  const fullName =
+    [firstName, middleName, lastName].filter(Boolean).join(" ").trim() ||
+    firstString(entity, ["fullname", "fullName", "full_name", "name"]) ||
+    "";
+
+  if (!fullName) {
+    // Log the keys (never the values beyond a short prefix) so the mapping can be fixed fast.
+    console.error("[Veripine] Identity response contains no usable name", {
+      httpStatus,
+      identifierType,
+      dataKeys: Object.keys(data),
+      entityKeys: Object.keys(entity),
+      sampleValues: Object.fromEntries(
+        Object.entries(entity)
+          .filter(([k]) => /name|first|last|sur/i.test(k))
+          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 30) : typeof v]),
+      ),
+    });
+    throw new HttpError(
+      502,
+      "kyc_incomplete",
+      `The identity provider returned no name for that ${identifierType}.`,
+    );
+  }
+
+  return {
+    firstName,
+    middleName,
+    lastName,
+    fullName,
+    dateOfBirth: firstString(entity, ["birthdate", "dateOfBirth", "date_of_birth", "dob"]),
+    phoneNumber: firstString(entity, [
+      "telephoneno",
+      "phone",
+      "phoneNumber",
+      "phone_number",
+      "phoneNumber1",
+    ]),
+    gender: firstString(entity, ["gender", "Gender"]),
+    photo: firstString(entity, ["photo", "image", "base64Image"]),
+  };
+}
+
 /**
  * Handles Veripine error responses and normalizes them into appropriate HttpError exceptions.
  */
@@ -303,68 +444,16 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     );
   }
 
-  const entity = body.data;
-
-  // Veripine docs show lowercase (`firstname`, `surname`), but some endpoints
-  // or API revisions return camelCase, snake_case, or capitalised variants.
-  // Try every known variant so a minor Veripine schema change doesn't break KYC.
-  const firstName =
-    optionalString(entity.firstname) ??
-    optionalString(entity.firstName) ??
-    optionalString(entity.first_name) ??
-    optionalString(entity.Firstname) ??
-    "";
-  const middleName =
-    optionalString(entity.middlename) ??
-    optionalString(entity.middleName) ??
-    optionalString(entity.middle_name) ??
-    "";
-  const lastName =
-    optionalString(entity.surname) ??
-    optionalString(entity.lastname) ??
-    optionalString(entity.lastName) ??
-    optionalString(entity.last_name) ??
-    optionalString(entity.Surname) ??
-    "";
-
-  const fullName = [firstName, middleName, lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  if (!fullName) {
-    // Log every key Veripine actually returned so we can fix the mapping fast.
-    console.error("[Veripine] Identity response contains no usable name", {
-      httpStatus: response.status,
-      dataKeys: Object.keys(entity),
-      sampleValues: Object.fromEntries(
-        Object.entries(entity)
-          .filter(([k]) => /name|first|last|sur/i.test(k))
-          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 30) : typeof v]),
-      ),
-    });
-    throw new HttpError(
-      502,
-      "kyc_incomplete",
-      "The identity provider returned no name for that NIN.",
-    );
-  }
+  const identity = parseIdentity(body.data, "NIN", sanitizedNin, response.status);
 
   return {
-    firstName,
-    middleName,
-    lastName,
-    fullName,
-    dateOfBirth:
-      optionalString(entity.birthdate) ??
-      optionalString(entity.dateOfBirth) ??
-      optionalString(entity.date_of_birth),
-    phoneNumber:
-      optionalString(entity.telephoneno) ??
-      optionalString(entity.phone) ??
-      optionalString(entity.phoneNumber) ??
-      optionalString(entity.phone_number),
-    photo: optionalString(entity.photo) ?? optionalString(entity.image),
+    firstName: identity.firstName,
+    middleName: identity.middleName,
+    lastName: identity.lastName,
+    fullName: identity.fullName,
+    dateOfBirth: identity.dateOfBirth,
+    phoneNumber: identity.phoneNumber,
+    photo: identity.photo,
     provider: "veripine",
     raw: body,
   };
@@ -499,67 +588,17 @@ export async function lookupBvn(bvn: string): Promise<BvnIdentity> {
     );
   }
 
-  const entity = body.data;
-
-  const firstName =
-    optionalString(entity.firstname) ??
-    optionalString(entity.firstName) ??
-    optionalString(entity.first_name) ??
-    optionalString(entity.Firstname) ??
-    "";
-  const middleName =
-    optionalString(entity.middlename) ??
-    optionalString(entity.middleName) ??
-    optionalString(entity.middle_name) ??
-    "";
-  const lastName =
-    optionalString(entity.surname) ??
-    optionalString(entity.lastname) ??
-    optionalString(entity.lastName) ??
-    optionalString(entity.last_name) ??
-    optionalString(entity.Surname) ??
-    "";
-
-  const fullName = [firstName, middleName, lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  if (!fullName) {
-    console.error("[Veripine] Identity response contains no usable name", {
-      httpStatus: response.status,
-      dataKeys: Object.keys(entity),
-      sampleValues: Object.fromEntries(
-        Object.entries(entity)
-          .filter(([k]) => /name|first|last|sur/i.test(k))
-          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 30) : typeof v]),
-      ),
-    });
-    throw new HttpError(
-      502,
-      "kyc_incomplete",
-      "The identity provider returned no name for that BVN.",
-    );
-  }
+  const identity = parseIdentity(body.data, "BVN", sanitizedBvn, response.status);
 
   return {
-    firstName,
-    middleName,
-    lastName,
-    fullName,
-    dateOfBirth:
-      optionalString(entity.birthdate) ??
-      optionalString(entity.dateOfBirth) ??
-      optionalString(entity.date_of_birth),
-    phoneNumber:
-      optionalString(entity.telephoneno) ??
-      optionalString(entity.phone) ??
-      optionalString(entity.phoneNumber) ??
-      optionalString(entity.phone_number),
-    gender:
-      optionalString(entity.gender) ??
-      optionalString(entity.Gender),
-    photo: optionalString(entity.photo) ?? optionalString(entity.image),
+    firstName: identity.firstName,
+    middleName: identity.middleName,
+    lastName: identity.lastName,
+    fullName: identity.fullName,
+    dateOfBirth: identity.dateOfBirth,
+    phoneNumber: identity.phoneNumber,
+    gender: identity.gender,
+    photo: identity.photo,
     provider: "veripine",
     raw: body,
   };
