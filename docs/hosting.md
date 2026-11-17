@@ -22,7 +22,7 @@ Health check: `curl http://localhost:3001/health` → `{"status":"ok"}`
 | `BETTER_AUTH_SECRET` | yes | Session signing key. `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | no | Public origin of **this** API, e.g. `http://localhost:3001`. Defaults to `http://localhost:3001`. |
 | `PORT` | no | Defaults to `3001`, which is what the dashboard expects. |
-| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the local dashboard/landing plus `https://app-jeneviv.onrender.com`. |
+| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the local dashboard/landing plus `https://app-jeneviv.onrender.com` and `https://app-jeneviv.up.railway.app`. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google sign-in. When unset the API logs a warning and disables that provider; email + password keeps working. |
 | `PLATFORM_FEE_NGN`, `DEFAULT_GATEWAY` | no | `75`, `flutterwave`. |
 | `FLUTTERWAVE_CLIENT_ID` / `_SECRET` / `_WEBHOOK_SECRET` | for payments | Needed by `/api/banks` and virtual accounts. Without them `/api/banks` returns `500`. |
