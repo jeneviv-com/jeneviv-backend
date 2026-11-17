@@ -304,18 +304,44 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
   }
 
   const entity = body.data;
-  const firstName = optionalString(entity.firstname) ?? "";
-  const middleName = optionalString(entity.middlename) ?? "";
+
+  // Veripine docs show lowercase (`firstname`, `surname`), but some endpoints
+  // or API revisions return camelCase, snake_case, or capitalised variants.
+  // Try every known variant so a minor Veripine schema change doesn't break KYC.
+  const firstName =
+    optionalString(entity.firstname) ??
+    optionalString(entity.firstName) ??
+    optionalString(entity.first_name) ??
+    optionalString(entity.Firstname) ??
+    "";
+  const middleName =
+    optionalString(entity.middlename) ??
+    optionalString(entity.middleName) ??
+    optionalString(entity.middle_name) ??
+    "";
   const lastName =
-    optionalString(entity.surname) ?? optionalString(entity.lastname) ?? "";
+    optionalString(entity.surname) ??
+    optionalString(entity.lastname) ??
+    optionalString(entity.lastName) ??
+    optionalString(entity.last_name) ??
+    optionalString(entity.Surname) ??
+    "";
+
   const fullName = [firstName, middleName, lastName]
     .filter(Boolean)
     .join(" ")
     .trim();
 
   if (!fullName) {
+    // Log every key Veripine actually returned so we can fix the mapping fast.
     console.error("[Veripine] Identity response contains no usable name", {
       httpStatus: response.status,
+      dataKeys: Object.keys(entity),
+      sampleValues: Object.fromEntries(
+        Object.entries(entity)
+          .filter(([k]) => /name|first|last|sur/i.test(k))
+          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 30) : typeof v]),
+      ),
     });
     throw new HttpError(
       502,
@@ -329,9 +355,16 @@ export async function lookupNin(nin: string): Promise<NinIdentity> {
     middleName,
     lastName,
     fullName,
-    dateOfBirth: optionalString(entity.birthdate),
-    phoneNumber: optionalString(entity.telephoneno),
-    photo: optionalString(entity.photo),
+    dateOfBirth:
+      optionalString(entity.birthdate) ??
+      optionalString(entity.dateOfBirth) ??
+      optionalString(entity.date_of_birth),
+    phoneNumber:
+      optionalString(entity.telephoneno) ??
+      optionalString(entity.phone) ??
+      optionalString(entity.phoneNumber) ??
+      optionalString(entity.phone_number),
+    photo: optionalString(entity.photo) ?? optionalString(entity.image),
     provider: "veripine",
     raw: body,
   };
@@ -467,10 +500,26 @@ export async function lookupBvn(bvn: string): Promise<BvnIdentity> {
   }
 
   const entity = body.data;
-  const firstName = optionalString(entity.firstname) ?? "";
-  const middleName = optionalString(entity.middlename) ?? "";
+
+  const firstName =
+    optionalString(entity.firstname) ??
+    optionalString(entity.firstName) ??
+    optionalString(entity.first_name) ??
+    optionalString(entity.Firstname) ??
+    "";
+  const middleName =
+    optionalString(entity.middlename) ??
+    optionalString(entity.middleName) ??
+    optionalString(entity.middle_name) ??
+    "";
   const lastName =
-    optionalString(entity.surname) ?? optionalString(entity.lastname) ?? "";
+    optionalString(entity.surname) ??
+    optionalString(entity.lastname) ??
+    optionalString(entity.lastName) ??
+    optionalString(entity.last_name) ??
+    optionalString(entity.Surname) ??
+    "";
+
   const fullName = [firstName, middleName, lastName]
     .filter(Boolean)
     .join(" ")
@@ -479,6 +528,12 @@ export async function lookupBvn(bvn: string): Promise<BvnIdentity> {
   if (!fullName) {
     console.error("[Veripine] Identity response contains no usable name", {
       httpStatus: response.status,
+      dataKeys: Object.keys(entity),
+      sampleValues: Object.fromEntries(
+        Object.entries(entity)
+          .filter(([k]) => /name|first|last|sur/i.test(k))
+          .map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 30) : typeof v]),
+      ),
     });
     throw new HttpError(
       502,
@@ -492,10 +547,19 @@ export async function lookupBvn(bvn: string): Promise<BvnIdentity> {
     middleName,
     lastName,
     fullName,
-    dateOfBirth: optionalString(entity.birthdate),
-    phoneNumber: optionalString(entity.telephoneno),
-    gender: optionalString(entity.gender),
-    photo: optionalString(entity.photo),
+    dateOfBirth:
+      optionalString(entity.birthdate) ??
+      optionalString(entity.dateOfBirth) ??
+      optionalString(entity.date_of_birth),
+    phoneNumber:
+      optionalString(entity.telephoneno) ??
+      optionalString(entity.phone) ??
+      optionalString(entity.phoneNumber) ??
+      optionalString(entity.phone_number),
+    gender:
+      optionalString(entity.gender) ??
+      optionalString(entity.Gender),
+    photo: optionalString(entity.photo) ?? optionalString(entity.image),
     provider: "veripine",
     raw: body,
   };
