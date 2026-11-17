@@ -398,7 +398,9 @@ export async function initPayment(
         throw new HttpError(
           502,
           "gateway_error",
-          `Failed to create virtual account: ${err.message}`,
+          /payer's phone number or email address/i.test(err.message)
+            ? "Add a phone number or email address to continue with this payment."
+            : "We could not prepare your payment details. Please try again shortly.",
         );
       }
       throw err;

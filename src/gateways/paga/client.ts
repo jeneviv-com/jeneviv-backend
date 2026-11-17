@@ -106,6 +106,16 @@ export async function pagaRequest<T>(
   }
 
   if (!response.ok) {
+    console.error("[Paga] Request failed", {
+      path: opts.path,
+      httpStatus: response.status,
+      statusCode,
+      statusMessage:
+        typeof envelope.statusMessage === "string"
+          ? envelope.statusMessage
+          : undefined,
+      responseKeys: Object.keys(envelope),
+    });
     throw new GatewayError(
       "paga",
       typeof envelope.statusMessage === "string" && envelope.statusMessage
