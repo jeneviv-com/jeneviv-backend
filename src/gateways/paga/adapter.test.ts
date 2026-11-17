@@ -46,7 +46,10 @@ const baseArgs = {
 };
 
 describe("pagaAdapter.createVirtualAccount", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("sends the required payee and a hash in Paga's documented order", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse());
@@ -87,5 +90,38 @@ describe("pagaAdapter.createVirtualAccount", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(pagaAdapter.createVirtualAccount({ ...baseArgs })).rejects.toThrow(/phone number or email/);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs safe diagnostics when Paga returns an HTTP error", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          statusCode: "500",
+          statusMessage: "system error",
+          payer: { name: "Ada Obi" },
+        }),
+        { status: 500, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      pagaAdapter.createVirtualAccount({
+        ...baseArgs,
+        customerEmail: "ada@example.com",
+      }),
+    ).rejects.toThrow("system error");
+
+    expect(logError).toHaveBeenCalledWith(
+      "[Paga] Request failed",
+      expect.objectContaining({
+        path: "/paymentRequest",
+        httpStatus: 500,
+        statusCode: "500",
+        statusMessage: "system error",
+      }),
+    );
+    expect(JSON.stringify(logError.mock.calls)).not.toContain("Ada Obi");
   });
 });
