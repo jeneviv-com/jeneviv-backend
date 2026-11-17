@@ -51,6 +51,13 @@ function optionalUrl(name: string, fallback: string): string {
   return normaliseUrl(name, optional(name, fallback));
 }
 
+/** Reads a credential, trimming whitespace and one pair of wrapping quotes. */
+function secretValue(name: string): string {
+  const value = (process.env[name] ?? "").trim();
+  const quoted = /^(["'])(.*)\1$/.exec(value);
+  return (quoted ? quoted[2] : value).trim();
+}
+
 /**
  * Ports need stricter handling than optionalInt: some shells export PORT=0,
  * which makes the server bind to a random ephemeral port while clients keep
@@ -143,9 +150,11 @@ export const env = {
 
   // Paga Collect API. Public/secret keys authenticate the request; the hash key
   // signs it. Sandbox lives on beta-collect.paga.com.
-  PAGA_PUBLIC_KEY: process.env.PAGA_PUBLIC_KEY ?? "",
-  PAGA_SECRET_KEY: process.env.PAGA_SECRET_KEY ?? "",
-  PAGA_HASH_KEY: process.env.PAGA_HASH_KEY ?? "",
+  // Trimmed (and stripped of wrapping quotes): a stray newline or quote from
+  // a hosting dashboard paste breaks Basic auth with "invalid username or password".
+  PAGA_PUBLIC_KEY: secretValue("PAGA_PUBLIC_KEY"),
+  PAGA_SECRET_KEY: secretValue("PAGA_SECRET_KEY"),
+  PAGA_HASH_KEY: secretValue("PAGA_HASH_KEY"),
   PAGA_BASE_URL: optionalUrl("PAGA_BASE_URL", "https://collect.paga.com"),
   // Where Paga posts payment-request notifications. Defaults to this API.
   PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),

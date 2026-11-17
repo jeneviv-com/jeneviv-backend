@@ -89,6 +89,22 @@ export async function pagaRequest<T>(
     envelope.statusCode === undefined ? undefined : String(envelope.statusCode);
   const accepted = opts.acceptStatusCodes ?? ["0"];
 
+  const authRejected =
+    response.status === 401 ||
+    response.status === 403 ||
+    (typeof envelope.statusMessage === "string" &&
+      /invalid username or password|unauthori[sz]ed/i.test(envelope.statusMessage));
+  if (authRejected) {
+    // Sandbox (beta-collect.paga.com) and live (collect.paga.com) issue
+    // different keys; using one environment's keys on the other is the usual cause.
+    const environment = /beta-collect/i.test(base) ? "sandbox" : "live";
+    throw new GatewayError(
+      "paga",
+      `Paga rejected the API keys for ${environment} (${base}). Check that PAGA_PUBLIC_KEY and PAGA_SECRET_KEY are the ${environment} keys.`,
+      { status: response.status, raw: parsed ?? text },
+    );
+  }
+
   if (!response.ok) {
     throw new GatewayError(
       "paga",
