@@ -13,6 +13,7 @@ import {
 import { env } from "../../env.js";
 import { renderReceiptPdf } from "../../lib/receipt-pdf.js";
 import { HttpError } from "../../middleware/error.js";
+import { gatewayInfo } from "../../gateways/labels.js";
 
 export interface PublicReceipt {
   reference: string;
@@ -37,6 +38,9 @@ export interface PublicReceipt {
   group_logo_url: string | null;
   details: Array<{ label: string; value: string }>;
   /** How the money was split, in naira. */
+  /** The gateway that took this payment, and its display name. */
+  gateway: string;
+  gateway_label: string;
   breakdown: {
     collection: number;
     paystack_fee: number;
@@ -118,6 +122,8 @@ async function loadReceipt(reference: string): Promise<{
     workspace_name: merchant.displayName ?? merchant.merchantCode,
     group_name: group?.name ?? null,
     group_logo_url: group?.logoUrl ?? null,
+    gateway: tx.gateway,
+    gateway_label: gatewayInfo(tx.gateway).label,
     // How the money was split. Amounts are in naira, as stored.
     breakdown: {
       collection: tx.amount,
@@ -158,6 +164,7 @@ export async function renderPublicReceiptPdf(
     bankVerified: receipt.bank_verified,
     verifyUrl: receipt.verify_url,
     startedAt: new Date(receipt.started_at),
+    gatewayLabel: receipt.gateway_label,
     breakdown: {
       collection: receipt.breakdown.collection,
       paystackFee: receipt.breakdown.paystack_fee,
