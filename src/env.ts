@@ -26,6 +26,39 @@ function optionalInt(name: string, fallback: number): number {
 }
 
 /**
+ * Normalises a URL env var. Hosting dashboards make it easy to paste a bare
+ * host ("collect.paga.com"); fetch then fails at request time with "Failed to
+ * parse URL". Add https:// when the scheme is missing, drop trailing slashes,
+ * and refuse to boot if the value still isn't a URL. Empty stays empty when
+ * the fallback is empty (for "derive it" settings like PAGA_CALLBACK_URL).
+ */
+export function normaliseUrl(name: string, raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+  if (withScheme !== value) {
+    console.warn(`[ENV] ${name} has no scheme; using ${withScheme}. Set it with https:// to silence this.`);
+  }
+  try {
+    new URL(withScheme);
+  } catch {
+    throw new Error(`Env var ${name} must be a URL, got: ${raw}`);
+  }
+  return withScheme.replace(/\/+$/, "");
+}
+
+function optionalUrl(name: string, fallback: string): string {
+  return normaliseUrl(name, optional(name, fallback));
+}
+
+/** Reads a credential, trimming whitespace and one pair of wrapping quotes. */
+function secretValue(name: string): string {
+  const value = (process.env[name] ?? "").trim();
+  const quoted = /^(["'])(.*)\1$/.exec(value);
+  return (quoted ? quoted[2] : value).trim();
+}
+
+/**
  * Ports need stricter handling than optionalInt: some shells export PORT=0,
  * which makes the server bind to a random ephemeral port while clients keep
  * calling the documented one. Treat 0/out-of-range as "unset".
@@ -44,7 +77,7 @@ function optionalPort(name: string, fallback: number): number {
 export const env = {
   DATABASE_URL: required("DATABASE_URL"),
   BETTER_AUTH_SECRET: required("BETTER_AUTH_SECRET"),
-  BETTER_AUTH_URL: optional("BETTER_AUTH_URL", "http://localhost:3001"),
+  BETTER_AUTH_URL: optionalUrl("BETTER_AUTH_URL", "http://localhost:3001"),
   // Browsers enforce CORS for the dashboard -> API hop. Defaults cover local
   // development (:5173 dashboard, :3000 landing) and the deployed dashboard;
   // extend with any additional origin rather than removing these.
@@ -63,11 +96,11 @@ export const env = {
 
   FLUTTERWAVE_CLIENT_ID: process.env.FLUTTERWAVE_CLIENT_ID ?? "",
   FLUTTERWAVE_CLIENT_SECRET: process.env.FLUTTERWAVE_CLIENT_SECRET ?? "",
-  FLUTTERWAVE_BASE_URL: optional(
+  FLUTTERWAVE_BASE_URL: optionalUrl(
     "FLUTTERWAVE_BASE_URL",
     "https://f4bexperience.flutterwave.com",
   ),
-  FLUTTERWAVE_IDP_URL: optional(
+  FLUTTERWAVE_IDP_URL: optionalUrl(
     "FLUTTERWAVE_IDP_URL",
     "https://idp.flutterwave.com",
   ),
@@ -82,25 +115,25 @@ export const env = {
   ),
 
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY ?? "",
-  PAYSTACK_BASE_URL: optional("PAYSTACK_BASE_URL", "https://api.paystack.co"),
+  PAYSTACK_BASE_URL: optionalUrl("PAYSTACK_BASE_URL", "https://api.paystack.co"),
 
   // Identity + escrow providers. They are optional so the existing gateway
   // keeps working, but KYC and two-man withdrawals switch on once configured.
   VERIPINE_API_KEY: process.env.VERIPINE_API_KEY ?? "",
-  VERIPINE_BASE_URL: optional("VERIPINE_BASE_URL", "https://veripine.com"),
+  VERIPINE_BASE_URL: optionalUrl("VERIPINE_BASE_URL", "https://veripine.com"),
 
   MONNIFY_API_KEY: process.env.MONNIFY_API_KEY ?? "",
   MONNIFY_SECRET_KEY: process.env.MONNIFY_SECRET_KEY ?? "",
   MONNIFY_CONTRACT_CODE: process.env.MONNIFY_CONTRACT_CODE ?? "",
   MONNIFY_WALLET_ACCOUNT_NUMBER: process.env.MONNIFY_WALLET_ACCOUNT_NUMBER ?? "",
-  MONNIFY_BASE_URL: optional("MONNIFY_BASE_URL", "https://api.monnify.com"),
+  MONNIFY_BASE_URL: optionalUrl("MONNIFY_BASE_URL", "https://api.monnify.com"),
 
   TERMII_API_KEY: process.env.TERMII_API_KEY ?? "",
   TERMII_SENDER_ID: optional("TERMII_SENDER_ID", "Jeneviv"),
-  TERMII_BASE_URL: optional("TERMII_BASE_URL", "https://api.ng.termii.com"),
+  TERMII_BASE_URL: optionalUrl("TERMII_BASE_URL", "https://api.ng.termii.com"),
 
   // Public dashboard origin used to build treasurer approval links.
-  APP_PUBLIC_URL: optional("APP_PUBLIC_URL", "http://localhost:5173"),
+  APP_PUBLIC_URL: optionalUrl("APP_PUBLIC_URL", "http://localhost:5173"),
   // Local/dev escape hatch: lets the suite exercise provider flows without
   // live Veripine/Paystack/Monnify keys. Never enable in production.
   ALLOW_PROVIDER_MOCKS: optional("ALLOW_PROVIDER_MOCKS", "false") === "true",
@@ -117,12 +150,16 @@ export const env = {
 
   // Paga Collect API. Public/secret keys authenticate the request; the hash key
   // signs it. Sandbox lives on beta-collect.paga.com.
-  PAGA_PUBLIC_KEY: process.env.PAGA_PUBLIC_KEY ?? "",
-  PAGA_SECRET_KEY: process.env.PAGA_SECRET_KEY ?? "",
-  PAGA_HASH_KEY: process.env.PAGA_HASH_KEY ?? "",
-  PAGA_BASE_URL: optional("PAGA_BASE_URL", "https://collect.paga.com"),
+  // Trimmed (and stripped of wrapping quotes): a stray newline or quote from
+  // a hosting dashboard paste breaks Basic auth with "invalid username or password".
+  PAGA_PUBLIC_KEY: secretValue("PAGA_PUBLIC_KEY"),
+  PAGA_SECRET_KEY: secretValue("PAGA_SECRET_KEY"),
+  PAGA_HASH_KEY: secretValue("PAGA_HASH_KEY"),
+  PAGA_BASE_URL: optionalUrl("PAGA_BASE_URL", "https://collect.paga.com"),
+  // Shown to payers on their bank's name enquiry for Paga transfer accounts.
+  PAGA_PAYEE_NAME: optional("PAGA_PAYEE_NAME", "Jeneviv").trim(),
   // Where Paga posts payment-request notifications. Defaults to this API.
-  PAGA_CALLBACK_URL: optional("PAGA_CALLBACK_URL", ""),
+  PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),
 
   RESEND_API_KEY: process.env.RESEND_API_KEY ?? "",
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL ?? "",

@@ -118,10 +118,17 @@ export const pagaAdapter: PaymentGateway = {
     args: CreateVirtualAccountArgs,
   ): Promise<CreateVirtualAccountResult> {
     const amount = toMajor(args.amount, args.currency);
+    const phoneNumber = args.customerPhone?.trim() || "";
+    const email = args.customerEmail?.trim() || "";
+    if (!phoneNumber && !email) {
+      throw new GatewayError("paga", "Paga needs the payer's phone number or email address.");
+    }
+    // Omit blank contact fields rather than sending "": Paga requires one of
+    // them and rejects empty strings. They still hash as "" (see below).
     const payer = {
       name: args.customerName?.trim() || "Jeneviv payer",
-      phoneNumber: args.customerPhone?.trim() || "",
-      email: args.customerEmail?.trim() || "",
+      ...(phoneNumber ? { phoneNumber } : {}),
+      ...(email ? { email } : {}),
     };
 
     const body = {
@@ -129,6 +136,10 @@ export const pagaAdapter: PaymentGateway = {
       amount,
       currency: args.currency,
       payer,
+      // Required by Paga. With no account identifiers the business processing
+      // the request (Jeneviv) receives the funds; the name is what the payer
+      // sees on their bank's name enquiry.
+      payee: { name: env.PAGA_PAYEE_NAME },
       expiryDateTimeUTC: new Date(Date.now() + args.expirySeconds * 1000)
         .toISOString()
         .slice(0, 19),
@@ -152,9 +163,9 @@ export const pagaAdapter: PaymentGateway = {
         args.reference,
         amount,
         args.currency,
-        payer.phoneNumber,
-        payer.email,
-        // No payee: these four stay empty.
+        phoneNumber,
+        email,
+        // The payee carries only a name, so its four hashed identifiers are empty.
         "",
         "",
         "",
