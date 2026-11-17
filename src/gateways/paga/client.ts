@@ -117,6 +117,16 @@ export async function pagaRequest<T>(
 
   // Paga returns 200 with a non-zero statusCode when the request was rejected.
   if (statusCode !== undefined && !accepted.includes(statusCode)) {
+    // Paga's messages are terse ("system error"); log the code and the
+    // envelope's keys (never the request, which carries payer details).
+    console.error("[Paga] Request rejected", {
+      path: opts.path,
+      httpStatus: response.status,
+      statusCode,
+      statusMessage: envelope.statusMessage,
+      errorMessage: envelope.errorMessage ?? envelope.message,
+      responseKeys: Object.keys(envelope),
+    });
     throw new GatewayError(
       "paga",
       typeof envelope.statusMessage === "string" && envelope.statusMessage

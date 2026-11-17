@@ -156,6 +156,8 @@ export const env = {
   PAGA_SECRET_KEY: secretValue("PAGA_SECRET_KEY"),
   PAGA_HASH_KEY: secretValue("PAGA_HASH_KEY"),
   PAGA_BASE_URL: optionalUrl("PAGA_BASE_URL", "https://collect.paga.com"),
+  // Shown to payers on their bank's name enquiry for Paga transfer accounts.
+  PAGA_PAYEE_NAME: optional("PAGA_PAYEE_NAME", "Jeneviv").trim(),
   // Where Paga posts payment-request notifications. Defaults to this API.
   PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),
 
