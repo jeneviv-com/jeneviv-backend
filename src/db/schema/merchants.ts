@@ -52,6 +52,12 @@ export const merchants = pgTable(
       .$type<EmailNotificationPeriod>()
       .notNull()
       .default("immediate"),
+    // When the batcher last emailed this workspace a payment digest. Null means
+    // never; the first digest then covers one period back from now.
+    lastNotificationDigestAt: timestamp("last_notification_digest_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
     applicationNote: text("application_note"),
     adminReviewNote: text("admin_review_note"),
     reviewedByUid: text("reviewed_by_uid").references(() => users.id, {
