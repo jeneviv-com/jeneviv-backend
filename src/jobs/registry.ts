@@ -54,7 +54,7 @@ export function getJobs(defaultGatewayName: string): Record<string, JobDefinitio
     "notification-batcher": {
       name: "notification-batcher",
       description:
-        "Flush queued merchant email notifications per email_notification_period (Phase 10).",
+        "Email each workspace a payment digest when its email_notification_period has elapsed.",
       cron: "*/15 * * * *",
       run: () => runNotificationBatcher(),
     },

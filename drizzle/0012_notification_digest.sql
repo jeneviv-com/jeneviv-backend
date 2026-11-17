@@ -1,0 +1,1 @@
+ALTER TABLE "merchants" ADD COLUMN IF NOT EXISTS "last_notification_digest_at" timestamp with time zone;

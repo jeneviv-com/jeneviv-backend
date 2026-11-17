@@ -29,6 +29,7 @@ import { transactionsRouter } from "./modules/transactions/routes.js";
 import { uploadsRouter } from "./modules/uploads/routes.js";
 import { verifyRouter } from "./modules/verify/routes.js";
 import { webhooksRouter } from "./modules/webhooks/routes.js";
+import { gatewayInfo } from "./gateways/labels.js";
 
 const app = express();
 
@@ -60,6 +61,13 @@ app.use(express.json());
 
 app.get("/health", (_request, response) => {
   response.json({ status: "ok" });
+});
+
+// Public: which gateway takes payments, so the dashboard and payment pages
+// describe settlement correctly when DEFAULT_GATEWAY changes.
+app.get("/api/config", (_request, response) => {
+  response.set("Cache-Control", "public, max-age=300");
+  response.json({ gateway: gatewayInfo(env.DEFAULT_GATEWAY) });
 });
 
 app.use("/api/merchants", merchantsRouter);

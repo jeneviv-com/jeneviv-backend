@@ -19,6 +19,7 @@ import { getGateway } from "../../gateways/registry.js";
 import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
 import { sendReceiptEmail } from "../verify/notify.js";
+import { notifyMerchantOfPayment } from "../merchants/notify.js";
 import { toMajor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import {
@@ -452,6 +453,7 @@ async function handleChargeSuccess(
     transactionId: tx.id,
     collectionId: tx.collectionId,
   });
+  await notifyMerchantOfPayment(tx.id);
 }
 
 async function handleChargeFailed(

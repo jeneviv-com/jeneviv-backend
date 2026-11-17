@@ -11,6 +11,8 @@ import {
 } from "pdf-lib";
 
 export interface ReceiptPdfData {
+  /** Display name of the gateway that took the payment. */
+  gatewayLabel?: string;
   reference: string;
   schoolName: string;
   logoUrl: string | null;
@@ -251,7 +253,7 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
 
   const steps = [
     { l1: "Payment", l2: "started", time: data.startedAt ? shortWhen(data.startedAt) : "", done: true },
-    { l1: "Confirmed", l2: "by Paystack", time: shortWhen(data.paidAt), done: true },
+    { l1: "Confirmed", l2: `by ${data.gatewayLabel ?? "Paystack"}`, time: shortWhen(data.paidAt), done: true },
     { l1: "Settles to", l2: "their bank", time: "Next working day", done: false },
   ];
 
@@ -450,7 +452,7 @@ export async function renderReceiptPdf(data: ReceiptPdfData): Promise<Uint8Array
     textAt("How the money was split", left, lowerTop - 34, bold, 12, INK);
     const lines: Array<[string, number]> = [
       ["Collection (set by the school)", breakdown.collection],
-      ["Paystack processing fee", breakdown.paystackFee],
+      [`${data.gatewayLabel ?? "Paystack"} processing fee`, breakdown.paystackFee],
       ["Jeneviv platform fee", breakdown.jenevivFee],
     ];
     lines.forEach(([label, value], i) => {
