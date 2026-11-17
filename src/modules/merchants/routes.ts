@@ -3,11 +3,13 @@ import { HttpError } from "../../middleware/error.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-merchant.js";
 import { validate } from "../../middleware/validate.js";
+import { rateLimiter } from "../../middleware/rate-limit.js";
 import {
   applyMerchantSchema,
   bankAccountIdParamSchema,
   createBankAccountSchema,
   setTreasurerSchema,
+  submitBvnSchema,
   submitNinSchema,
   updateMerchantSettingsSchema,
   verifyBankSchema,
@@ -24,6 +26,7 @@ import {
 import {
   setTreasurer,
   toKycView,
+  verifyBvn,
   verifyKycBank,
   verifyNin,
 } from "../kyc/service.js";
@@ -79,14 +82,33 @@ merchantsRouter.get("/me/kyc", async (req, res, next) => {
   }
 });
 
+// Each identity lookup is a paid Veripine call, so both routes share the
+// per-merchant KYC limiter.
 merchantsRouter.post(
   "/me/kyc/nin",
   requireRole("owner"),
+  rateLimiter.kycLimiter,
   validate(submitNinSchema),
   async (req, res, next) => {
     try {
       const merchant = req.merchant!;
       const kyc = await verifyNin(merchant, req.body.nin);
+      res.json({ kyc });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+merchantsRouter.post(
+  "/me/kyc/bvn",
+  requireRole("owner"),
+  rateLimiter.kycLimiter,
+  validate(submitBvnSchema),
+  async (req, res, next) => {
+    try {
+      const merchant = req.merchant!;
+      const kyc = await verifyBvn(merchant, req.body.bvn);
       res.json({ kyc });
     } catch (err) {
       next(err);

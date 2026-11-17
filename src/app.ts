@@ -32,6 +32,12 @@ import { webhooksRouter } from "./modules/webhooks/routes.js";
 
 const app = express();
 
+// The API runs behind exactly one hosting proxy (Render/Railway), which sets
+// X-Forwarded-For. Trusting that one hop gives req.ip the real client address.
+// Without it express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR and
+// every user shares the proxy's IP, so one busy minute locks everyone out.
+app.set("trust proxy", 1);
+
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(currentDir, "../public");
 

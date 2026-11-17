@@ -78,6 +78,13 @@
       "when": 1794586296060,
       "tag": "0010_glorious_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794914330118,
+      "tag": "0011_bvn_identity",
+      "breakpoints": true
     }
   ]
 }

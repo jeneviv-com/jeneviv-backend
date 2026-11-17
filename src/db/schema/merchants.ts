@@ -67,7 +67,9 @@ export const merchants = pgTable(
       .notNull()
       .default({}),
     // Progressive KYC: collecting is open from day one, withdrawals unlock only
-    // after the NIN owner and the settlement bank account names match.
+    // after the identity (NIN or BVN) owner and the settlement bank account
+    // names match. `ninVerifiedAt` marks the identity step for either method;
+    // `kycIdType` says which one was used.
     kycStatus: text("kyc_status")
       .$type<KycStatus>()
       .notNull()
@@ -76,6 +78,9 @@ export const merchants = pgTable(
     canWithdraw: boolean("can_withdraw").notNull().default(false),
     ninHash: text("nin_hash"),
     ninLast4: text("nin_last4"),
+    bvnHash: text("bvn_hash"),
+    bvnLast4: text("bvn_last4"),
+    kycIdType: text("kyc_id_type").$type<"nin" | "bvn">(),
     kycLegalName: text("kyc_legal_name"),
     kycProviderRef: text("kyc_provider_ref"),
     ninVerifiedAt: timestamp("nin_verified_at", {

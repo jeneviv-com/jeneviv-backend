@@ -250,3 +250,79 @@ describe("Veripine Balance & Redaction", () => {
     expect(safe).toContain("[REDACTED_API_KEY]");
   });
 });
+
+describe("Veripine nested response envelopes", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubResponse(body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+  }
+
+  // Matches the production log: data had keys [status, message, data, report_id].
+  it("unwraps a person record nested under data.data for NIN", async () => {
+    stubResponse({
+      status: "success",
+      data: {
+        status: true,
+        message: "Verification successful",
+        report_id: "R-1",
+        data: { firstname: "AMAKA", middlename: "", surname: "OKAFOR", birthdate: "1995-01-02" },
+      },
+    });
+    const identity = await lookupNin("12345678901");
+    expect(identity).toMatchObject({
+      fullName: "AMAKA OKAFOR",
+      dateOfBirth: "1995-01-02",
+      provider: "veripine",
+    });
+  });
+
+  it("unwraps a nested camelCase BVN record", async () => {
+    stubResponse({
+      status: "success",
+      data: {
+        status: "success",
+        message: "ok",
+        report_id: "R-2",
+        data: { firstName: "TUNDE", middleName: "A", lastName: "BELLO", gender: "Male" },
+      },
+    });
+    const identity = await lookupBvn("22345678901");
+    expect(identity).toMatchObject({ fullName: "TUNDE A BELLO", gender: "Male" });
+  });
+
+  it("reports not found when the nested envelope has no person and says so", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stubResponse({
+      status: "success",
+      data: { status: false, message: "BVN not found", report_id: "R-3", data: null },
+    });
+    await expect(lookupBvn("22345678901")).rejects.toMatchObject({
+      status: 422,
+      code: "bvn_not_found",
+    });
+  });
+
+  it("returns kyc_incomplete when the nested envelope is empty for another reason", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stubResponse({
+      status: "success",
+      data: { status: false, message: "Upstream timeout", report_id: "R-4", data: null },
+    });
+    await expect(lookupNin("12345678901")).rejects.toMatchObject({
+      status: 502,
+      code: "kyc_incomplete",
+    });
+  });
+});

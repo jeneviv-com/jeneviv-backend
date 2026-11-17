@@ -44,6 +44,14 @@ export const submitNinSchema = z.object({
 });
 export type SubmitNinInput = z.infer<typeof submitNinSchema>;
 
+export const submitBvnSchema = z.object({
+  bvn: z
+    .string()
+    .trim()
+    .regex(/^\d{11}$/, "BVN must be exactly 11 digits"),
+});
+export type SubmitBvnInput = z.infer<typeof submitBvnSchema>;
+
 export const verifyBankSchema = z.object({
   bank_code: z.string().trim().min(2).max(20),
   account_number: z.string().trim().regex(/^\d{6,20}$/),

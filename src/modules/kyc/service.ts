@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { merchants, merchantBankAccounts, type Merchant } from "../../db/schema/merchants.js";
 import { env } from "../../env.js";
-import { lookupNin } from "../../lib/veripine.js";
-import { hashNin } from "../../lib/secrets.js";
+import { lookupBvn, lookupNin } from "../../lib/veripine.js";
+import { hashBvn, hashNin } from "../../lib/secrets.js";
 import { namesMatch } from "../../lib/names.js";
 import { recordAudit } from "../../lib/audit.js";
 import { newId } from "../../lib/short-code.js";
@@ -19,6 +19,10 @@ export interface KycView {
   can_collect: boolean;
   can_withdraw: boolean;
   nin_last4: string | null;
+  /** Which identity number verified this merchant, if any. */
+  id_type: "nin" | "bvn" | null;
+  /** Last four digits of that number (NIN or BVN). */
+  id_last4: string | null;
   verified_legal_name: string | null;
   nin_verified_at: string | null;
   bank_verified_at: string | null;
@@ -32,12 +36,21 @@ export interface KycView {
   maturity: "unverified" | "nin_verified" | "ready";
 }
 
+function idTypeOf(merchant: Merchant): "nin" | "bvn" | null {
+  if (merchant.kycIdType === "bvn" || merchant.kycIdType === "nin") return merchant.kycIdType;
+  // Rows verified before BVN support existed only ever used NIN.
+  return merchant.ninVerifiedAt ? "nin" : null;
+}
+
 export function toKycView(merchant: Merchant): KycView {
+  const idType = idTypeOf(merchant);
   return {
     kyc_status: merchant.kycStatus,
     can_collect: merchant.canCollect,
     can_withdraw: merchant.canWithdraw,
     nin_last4: merchant.ninLast4,
+    id_type: idType,
+    id_last4: idType === "bvn" ? merchant.bvnLast4 : merchant.ninLast4,
     verified_legal_name: merchant.kycLegalName,
     nin_verified_at: merchant.ninVerifiedAt?.toISOString() ?? null,
     bank_verified_at: merchant.bankVerifiedAt?.toISOString() ?? null,
@@ -68,11 +81,19 @@ async function reload(merchantId: string): Promise<Merchant> {
   return row;
 }
 
-export async function verifyNin(
+export type IdentityType = "nin" | "bvn";
+
+/**
+ * Verifies the owner's identity with either a NIN or a BVN. Both unlock the
+ * same step: collecting, and a legal name the settlement bank must match.
+ */
+export async function verifyIdentity(
   merchant: Merchant,
-  nin: string,
+  idType: IdentityType,
+  value: string,
 ): Promise<KycView> {
-  const identity = await lookupNin(nin);
+  const identity = idType === "nin" ? await lookupNin(value) : await lookupBvn(value);
+  const last4 = value.slice(-4);
 
   const alreadyBankVerified = Boolean(
     merchant.canWithdraw &&
@@ -80,34 +101,47 @@ export async function verifyNin(
       namesMatch(merchant.kycLegalName, identity.fullName),
   );
 
+  const now = new Date();
   await db
     .update(merchants)
     .set({
       kycStatus: alreadyBankVerified ? "verified" : "nin_verified",
       canCollect: true,
       canWithdraw: alreadyBankVerified,
-      ninHash: hashNin(nin),
-      ninLast4: nin.slice(-4),
+      kycIdType: idType,
+      ...(idType === "nin"
+        ? { ninHash: hashNin(value), ninLast4: last4 }
+        : { bvnHash: hashBvn(value), bvnLast4: last4 }),
       kycLegalName: identity.fullName,
       kycProviderRef: identity.provider,
-      ninVerifiedAt: new Date(),
-      updatedAt: new Date(),
+      // Marks the identity step for either method; see the schema comment.
+      ninVerifiedAt: now,
+      updatedAt: now,
     })
     .where(eq(merchants.id, merchant.id));
 
   await recordAudit({
     actorUid: merchant.userId,
-    action: "merchant.kyc.nin_verified",
+    action: idType === "nin" ? "merchant.kyc.nin_verified" : "merchant.kyc.bvn_verified",
     entityType: "merchant",
     entityId: merchant.id,
     metadata: {
       provider: identity.provider,
-      nin_last4: nin.slice(-4),
+      id_type: idType,
+      [`${idType}_last4`]: last4,
       legal_name: identity.fullName,
     },
   });
 
   return toKycView(await reload(merchant.id));
+}
+
+export function verifyNin(merchant: Merchant, nin: string): Promise<KycView> {
+  return verifyIdentity(merchant, "nin", nin);
+}
+
+export function verifyBvn(merchant: Merchant, bvn: string): Promise<KycView> {
+  return verifyIdentity(merchant, "bvn", bvn);
 }
 
 async function resolveBankName(
@@ -152,12 +186,13 @@ export async function verifyKycBank(
     throw new HttpError(
       422,
       "nin_required",
-      "Verify your NIN before adding a settlement bank account.",
+      "Verify your NIN or BVN before adding a settlement bank account.",
     );
   }
 
   const resolved = await resolveBankName(input.bank_code, input.account_number);
   const matched = namesMatch(merchant.kycLegalName, resolved.accountName);
+  const idLabel = idTypeOf(merchant) === "bvn" ? "BVN" : "NIN";
 
   await recordAudit({
     actorUid: merchant.userId,
@@ -177,11 +212,12 @@ export async function verifyKycBank(
     throw new HttpError(
       422,
       "bank_name_mismatch",
-      `The bank account name (${resolved.accountName}) does not match the NIN record (${merchant.kycLegalName}).`,
+      `The bank account name (${resolved.accountName}) does not match the ${idLabel} record (${merchant.kycLegalName}).`,
       {
         matched: false,
         account_name: resolved.accountName,
         legal_name: merchant.kycLegalName,
+        id_type: idTypeOf(merchant) ?? "nin",
       },
     );
   }

@@ -1,0 +1,31 @@
+info:
+  name: Verify BVN
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{api}}/api/merchants/me/kyc/bvn"
+  headers:
+    - name: Cookie
+      value: "{{session_cookie}}"
+    - name: Origin
+      value: "{{api}}"
+  body:
+    type: json
+    data: |-
+      {
+        "bvn": "22123456789"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const k = res.body && res.body.kyc;
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
