@@ -3,7 +3,9 @@ import { defineConfig } from "drizzle-kit";
 
 dotenv.config();
 
-console.log("Using DATABASE_URL:", process.env.DATABASE_URL);
+// Never print the full URL: it carries the database password into build logs.
+const dbUrl = process.env.DATABASE_URL ?? "";
+console.log("Using DATABASE_URL:", dbUrl.replace(/\/\/[^@]*@/, "//***@"));
 
 export default defineConfig({
   schema: "./src/db/schema/index.ts",
