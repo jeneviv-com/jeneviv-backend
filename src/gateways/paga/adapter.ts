@@ -186,6 +186,7 @@ async function createSubsidiaryAccount(
   const callback = callbackUrl();
   const referenceNumber = pagaCallReference("jvsa");
   const destination = "VIRTUAL_ACCOUNT";
+  const iifiNumber = env.PAGA_SUBSIDIARY_IIFI_NUMBER || "";
 
   const body = {
     referenceNumber,
@@ -195,6 +196,7 @@ async function createSubsidiaryAccount(
     lastName,
     ...(phoneNumber ? { phoneNumber } : {}),
     ...(email ? { email } : {}),
+    ...(iifiNumber ? { iifiNumber } : {}),
     status: "ACTIVE",
     autoSweep: { destination },
     callbackUrl: callback,
@@ -207,7 +209,7 @@ async function createSubsidiaryAccount(
       body,
       // referenceNumber + accountReference + iifiNumber + autoSweep.bankPublicId
       // + autoSweep.destination + autoSweep.accountNumber + callbackUrl.
-      hashParts: [referenceNumber, reference, "", "", destination, "", callback],
+      hashParts: [referenceNumber, reference, iifiNumber, "", destination, "", callback],
     });
   } catch (err) {
     console.error("[Paga] subsidiary account context", {
@@ -215,6 +217,7 @@ async function createSubsidiaryAccount(
       baseUrl: env.PAGA_BASE_URL,
       callbackHost: new URL(callback).host,
       accountReferenceLength: reference.length,
+      sentIifiNumber: Boolean(iifiNumber),
       payerFields: Object.keys(body).filter((key) => key === "phoneNumber" || key === "email"),
     });
     throw err;

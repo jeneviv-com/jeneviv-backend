@@ -11,6 +11,7 @@ vi.mock("../../env.js", () => ({
     PAGA_PAYEE_NAME: "Jeneviv",
     PAGA_PAYMENT_METHODS: ["BANK_TRANSFER"],
     PAGA_COLLECT_MODE: "subsidiary",
+    PAGA_SUBSIDIARY_IIFI_NUMBER: "",
     BETTER_AUTH_URL: "https://api.example.com",
     APP_PUBLIC_URL: "https://app.example.com",
   },
@@ -124,5 +125,28 @@ describe("Paga subsidiary accounts", () => {
     expect(isPagaFundingNotification(payload)).toBe(true);
     expect(getPagaEventId(payload)).toBe("funding:MPVAT-P_1");
     expect(isPagaFundingNotification({ externalReferenceNumber: "x", ...payload })).toBe(false);
+  });
+
+  it("sends iifiNumber and hashes it in third place when configured", async () => {
+    const { env } = await import("../../env.js");
+    (env as Record<string, unknown>).PAGA_SUBSIDIARY_IIFI_NUMBER = "22222132329";
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({ statusCode: "0", accountNumber: "0750529406", accountReference: args.reference }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await pagaAdapter.createVirtualAccount(args);
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(body.iifiNumber).toBe("22222132329");
+      const expected = createHash("sha512")
+        .update(
+          `${body.referenceNumber}${args.reference}22222132329VIRTUAL_ACCOUNThttps://api.example.com/api/webhooks/pagahashkey`,
+        )
+        .digest("hex");
+      expect((init.headers as Record<string, string>).hash).toBe(expected);
+    } finally {
+      (env as Record<string, unknown>).PAGA_SUBSIDIARY_IIFI_NUMBER = "";
+    }
   });
 });
