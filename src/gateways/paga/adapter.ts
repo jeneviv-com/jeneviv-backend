@@ -41,7 +41,6 @@ import { parsePagaEvent, verifyPagaSignature } from "./webhook.js";
  * merchant still receives the full collection amount.
  */
 
-const COLLECTION_METHODS = ["BANK_TRANSFER", "FUNDING_USSD", "REQUEST_MONEY"];
 
 const FAILED_STATES = new Set(["FAILED", "CANCELLED", "EXPIRED"]);
 
@@ -96,9 +95,28 @@ function parsePagaDate(value: string | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function isLocalUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local");
+  } catch {
+    return true;
+  }
+}
+
 function callbackUrl(): string {
-  if (env.PAGA_CALLBACK_URL) return env.PAGA_CALLBACK_URL;
-  return `${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/api/webhooks/paga`;
+  const url = env.PAGA_CALLBACK_URL
+    || `${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/api/webhooks/paga`;
+  // Paga cannot reach localhost, and a request with an unreachable callback
+  // can never be confirmed. Fail loudly with the setting to fix instead.
+  if (isLocalUrl(url)) {
+    console.error("[Paga] Callback URL is not public", { callbackUrl: url });
+    throw new GatewayError(
+      "paga",
+      `Paga callback URL is not public (${url}). Set BETTER_AUTH_URL to the API's public https URL, or set PAGA_CALLBACK_URL.`,
+    );
+  }
+  return url;
 }
 
 export const pagaAdapter: PaymentGateway = {
@@ -131,6 +149,16 @@ export const pagaAdapter: PaymentGateway = {
       ...(email ? { email } : {}),
     };
 
+    const paymentMethods = env.PAGA_PAYMENT_METHODS.length
+      ? env.PAGA_PAYMENT_METHODS
+      : ["BANK_TRANSFER"];
+    // redirectUrl only matters for REQUEST_MONEY, and a localhost one is worse
+    // than none, so send it only when it can be used.
+    const redirectUrl =
+      paymentMethods.includes("REQUEST_MONEY") && !isLocalUrl(env.APP_PUBLIC_URL)
+        ? env.APP_PUBLIC_URL
+        : undefined;
+
     const body = {
       referenceNumber: args.reference,
       amount,
@@ -150,28 +178,42 @@ export const pagaAdapter: PaymentGateway = {
       isAllowPartialPayments: false,
       isAllowOverPayments: false,
       callBackUrl: callbackUrl(),
-      paymentMethods: COLLECTION_METHODS,
-      displayBankDetailToPayer: false,
-      redirectUrl: env.APP_PUBLIC_URL,
+      paymentMethods,
+      ...(redirectUrl ? { redirectUrl } : {}),
     };
 
-    const res = await pagaRequest<PagaPaymentRequestResponse>({
-      path: "/paymentRequest",
-      body,
-      // Paga appends the hash key itself inside pagaHash().
-      hashParts: [
-        args.reference,
-        amount,
-        args.currency,
-        phoneNumber,
-        email,
-        // The payee carries only a name, so its four hashed identifiers are empty.
-        "",
-        "",
-        "",
-        "",
-      ],
-    });
+    let res;
+    try {
+      res = await pagaRequest<PagaPaymentRequestResponse>({
+        path: "/paymentRequest",
+        body,
+        // Paga appends the hash key itself inside pagaHash().
+        hashParts: [
+          args.reference,
+          amount,
+          args.currency,
+          phoneNumber,
+          email,
+          // The payee carries only a name, so its four hashed identifiers are empty.
+          "",
+          "",
+          "",
+          "",
+        ],
+      });
+    } catch (err) {
+      // The request shape, never payer details: enough to compare with Paga's docs.
+      console.error("[Paga] paymentRequest context", {
+        callbackHost: new URL(body.callBackUrl).host,
+        paymentMethods: body.paymentMethods,
+        hasRedirectUrl: "redirectUrl" in body,
+        expiryDateTimeUTC: body.expiryDateTimeUTC,
+        amount: body.amount,
+        currency: body.currency,
+        payerFields: Object.keys(body.payer),
+      });
+      throw err;
+    }
 
     const request = res.data;
     const methods = request.paymentMethods ?? [];
