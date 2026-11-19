@@ -173,6 +173,10 @@ export const env = {
   "payment_request"
     ? "payment_request"
     : "subsidiary") as "subsidiary" | "payment_request",
+  // BVN or NIN sent as iifiNumber when creating subsidiary accounts, for
+  // businesses where Paga requires KYC on each account. Sandbox can use
+  // Paga's documented test BVN 22222132329. Leave empty to send none.
+  PAGA_SUBSIDIARY_IIFI_NUMBER: secretValue("PAGA_SUBSIDIARY_IIFI_NUMBER"),
   // Where Paga posts payment-request notifications. Defaults to this API.
   PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),
 
