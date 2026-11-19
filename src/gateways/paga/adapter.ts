@@ -206,6 +206,15 @@ export const pagaAdapter: PaymentGateway = {
     } catch (err) {
       // The request shape, never payer details: enough to compare with Paga's docs.
       console.error("[Paga] paymentRequest context", {
+        // What actually went wrong: auth rejection, missing key, network
+        // failure or Paga's own message. Never contains payer data or keys.
+        error: err instanceof Error ? err.message : String(err),
+        // fetch() network failures carry the real reason (DNS, TLS, refused) here.
+        cause: (() => {
+          const cause = (err as { cause?: unknown } | null)?.cause;
+          return cause instanceof Error ? `${cause.name}: ${cause.message}` : undefined;
+        })(),
+        baseUrl: env.PAGA_BASE_URL,
         callbackHost: new URL(body.callBackUrl).host,
         paymentMethods: body.paymentMethods,
         hasRedirectUrl: "redirectUrl" in body,
