@@ -143,6 +143,23 @@ describe("pagaAdapter request shape", () => {
     expect(body.paymentMethods).toEqual(["BANK_TRANSFER"]);
     expect("redirectUrl" in body).toBe(false);
     expect("displayBankDetailToPayer" in body).toBe(false);
+    // Exactly the fields Paga's official paga-collect library sends.
+    expect(Object.keys(body).sort()).toEqual(
+      [
+        "amount",
+        "callBackUrl",
+        "currency",
+        "expiryDateTimeUTC",
+        "isAllowPartialPayments",
+        "isSuppressMessages",
+        "payee",
+        "payeeCollectionFeeShare",
+        "payer",
+        "payerCollectionFeeShare",
+        "paymentMethods",
+        "referenceNumber",
+      ].sort(),
+    );
     expect(body.callBackUrl).toBe("https://api.example.com/api/webhooks/paga");
   });
 

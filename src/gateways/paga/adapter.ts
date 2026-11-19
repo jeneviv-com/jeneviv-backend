@@ -176,7 +176,9 @@ export const pagaAdapter: PaymentGateway = {
       payerCollectionFeeShare: 1,
       payeeCollectionFeeShare: 0,
       isAllowPartialPayments: false,
-      isAllowOverPayments: false,
+      // isAllowOverPayments is deliberately absent: Paga's own client library
+      // (paga-collect) never sends it, and an unrecognised field makes the
+      // Collect API fail with a bare "-1 system error".
       callBackUrl: callbackUrl(),
       paymentMethods,
       ...(redirectUrl ? { redirectUrl } : {}),
