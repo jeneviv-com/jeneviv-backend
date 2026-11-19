@@ -158,6 +158,13 @@ export const env = {
   PAGA_BASE_URL: optionalUrl("PAGA_BASE_URL", "https://collect.paga.com"),
   // Shown to payers on their bank's name enquiry for Paga transfer accounts.
   PAGA_PAYEE_NAME: optional("PAGA_PAYEE_NAME", "Jeneviv").trim(),
+  // Comma-separated Paga Collect payment methods. Defaults to what Paga's
+  // dynamic-account docs use. Add FUNDING_USSD / REQUEST_MONEY only once Paga
+  // confirms they are enabled for the business account.
+  PAGA_PAYMENT_METHODS: optional("PAGA_PAYMENT_METHODS", "BANK_TRANSFER")
+    .split(",")
+    .map((method) => method.trim().toUpperCase())
+    .filter(Boolean),
   // Where Paga posts payment-request notifications. Defaults to this API.
   PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),
 

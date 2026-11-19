@@ -9,6 +9,7 @@ vi.mock("../../env.js", () => ({
     PAGA_BASE_URL: "https://collect.paga.com",
     PAGA_CALLBACK_URL: "https://api.example.com/api/webhooks/paga",
     PAGA_PAYEE_NAME: "Jeneviv",
+    PAGA_PAYMENT_METHODS: ["BANK_TRANSFER"],
     BETTER_AUTH_URL: "https://api.example.com",
     APP_PUBLIC_URL: "https://app.example.com",
   },
@@ -123,5 +124,44 @@ describe("pagaAdapter.createVirtualAccount", () => {
       }),
     );
     expect(JSON.stringify(logError.mock.calls)).not.toContain("Ada Obi");
+  });
+});
+
+describe("pagaAdapter request shape", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("matches Paga's dynamic-account example: bank transfer only, no redirectUrl", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    await pagaAdapter.createVirtualAccount({ ...baseArgs, customerEmail: "ada@example.com" });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(body.paymentMethods).toEqual(["BANK_TRANSFER"]);
+    expect("redirectUrl" in body).toBe(false);
+    expect("displayBankDetailToPayer" in body).toBe(false);
+    expect(body.callBackUrl).toBe("https://api.example.com/api/webhooks/paga");
+  });
+
+  it("refuses to send a localhost callback URL to Paga", async () => {
+    const { env } = await import("../../env.js");
+    const saved = { cb: env.PAGA_CALLBACK_URL, auth: env.BETTER_AUTH_URL };
+    (env as Record<string, unknown>).PAGA_CALLBACK_URL = "";
+    (env as Record<string, unknown>).BETTER_AUTH_URL = "http://localhost:3001";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        pagaAdapter.createVirtualAccount({ ...baseArgs, customerEmail: "ada@example.com" }),
+      ).rejects.toThrow(/callback URL is not public/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      (env as Record<string, unknown>).PAGA_CALLBACK_URL = saved.cb;
+      (env as Record<string, unknown>).BETTER_AUTH_URL = saved.auth;
+    }
   });
 });
