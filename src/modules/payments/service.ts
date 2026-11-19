@@ -41,9 +41,15 @@ import { normaliseNgPhone } from "../../lib/phone.js";
 const REFERENCE_ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
+// 18 characters, the length Paga's own client library uses in its examples.
+// Paga's Collect API answered our 27-character references with a bare
+// "-1 system error"; every documented Paga reference is 12 to 21 characters.
+// 62^15 random combinations keeps collisions out of reach.
+const REFERENCE_RANDOM_LENGTH = 15;
+
 function newReference(): string {
   let out = "txn";
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < REFERENCE_RANDOM_LENGTH; i++) {
     out += REFERENCE_ALPHABET[Math.floor(Math.random() * REFERENCE_ALPHABET.length)];
   }
   return out;
