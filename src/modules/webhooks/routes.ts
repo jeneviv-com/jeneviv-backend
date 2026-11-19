@@ -20,7 +20,8 @@ webhooksRouter.post("/flutterwave", async (req: Request, res: Response) => {
 webhooksRouter.post("/paga", async (req: Request, res: Response) => {
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const { result, httpStatus } = await ingestPagaWebhook(rawBody, req.headers);
-  res.status(httpStatus).json(result);
+  // Paga treats anything but {"status":"SUCCESS"} as undelivered and retries.
+  res.status(httpStatus).json(httpStatus === 200 ? { status: "SUCCESS", result } : result);
 });
 
 webhooksRouter.post("/monnify", async (req: Request, res: Response) => {

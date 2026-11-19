@@ -28,7 +28,9 @@ export function pagaConfigured(): boolean {
 export interface PagaRequestOptions {
   /** Path below the Collect base URL, e.g. "/paymentRequest". */
   path: string;
-  body: unknown;
+  /** Defaults to POST. GET requests send no body. */
+  method?: "GET" | "POST" | "PUT";
+  body?: unknown;
   /** Values for the hash header, in the order Paga documents them. */
   hashParts: Array<string | number | undefined | null>;
   /**
@@ -63,15 +65,16 @@ export async function pagaRequest<T>(
     `${env.PAGA_PUBLIC_KEY}:${env.PAGA_SECRET_KEY}`,
   ).toString("base64");
 
+  const method = opts.method ?? "POST";
   const response = await fetch(`${base}${suffix}`, {
-    method: "POST",
+    method,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Basic ${credentials}`,
       hash: pagaHash(opts.hashParts),
     },
-    body: JSON.stringify(opts.body),
+    ...(method === "GET" ? {} : { body: JSON.stringify(opts.body ?? {}) }),
   });
 
   const text = await response.text();
@@ -126,7 +129,7 @@ export async function pagaRequest<T>(
       "paga",
       typeof envelope.statusMessage === "string" && envelope.statusMessage
         ? envelope.statusMessage
-        : `Paga POST ${opts.path} failed: ${response.status}`,
+        : `Paga ${method} ${opts.path} failed: ${response.status}`,
       { status: response.status, raw: parsed ?? text },
     );
   }

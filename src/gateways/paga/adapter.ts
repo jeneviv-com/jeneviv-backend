@@ -119,6 +119,168 @@ function callbackUrl(): string {
   return url;
 }
 
+interface PagaSubsidiaryAccountResponse {
+  referenceNumber?: string;
+  statusCode?: string;
+  statusMessage?: string;
+  accountNumber?: string;
+  accountReference?: string;
+  status?: string;
+  currency?: string;
+}
+
+interface PagaSubsidiaryHistoryResponse {
+  statusCode?: string;
+  statusMessage?: string;
+  transactions?: Array<{
+    transactionType?: string;
+    amount?: number | string;
+    transactionDate?: string;
+    status?: string;
+  }>;
+}
+
+/** Paga's UTC timestamp format: 2026-06-11T10:22:16 (no zone, no millis). */
+function pagaUtc(date: Date): string {
+  return date.toISOString().slice(0, 19);
+}
+
+/** Paga wants a fresh referenceNumber per call; accountReference is the account's id. */
+function pagaCallReference(prefix: string): string {
+  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function splitName(full: string): { firstName: string; lastName: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "Jeneviv", lastName: "Payer" };
+  if (parts.length === 1) return { firstName: parts[0]!, lastName: parts[0]! };
+  return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
+}
+
+/**
+ * Subsidiary Accounts (POST /subsidiary-accounts) issue a Paga NUBAN per
+ * payment. With autoSweep VIRTUAL_ACCOUNT nothing is held on the account:
+ * funds settle straight into the Jeneviv Paga business account, the same money
+ * flow as a payment request. accountReference is our payment reference, so
+ * the account can be looked up (and its history read) by reference later.
+ */
+async function createSubsidiaryAccount(
+  args: CreateVirtualAccountArgs,
+): Promise<CreateVirtualAccountResult> {
+  const reference = args.reference;
+  if (reference.length < 11 || reference.length > 30) {
+    throw new GatewayError(
+      "paga",
+      `Paga accountReference must be 11 to 30 characters (got ${reference.length}).`,
+    );
+  }
+  const phoneNumber = args.customerPhone?.trim() || "";
+  const email = args.customerEmail?.trim() || "";
+  if (!phoneNumber && !email) {
+    throw new GatewayError("paga", "Paga needs the payer's phone number or email address.");
+  }
+  const payerName = args.customerName?.trim() || "Jeneviv Payer";
+  const { firstName, lastName } = splitName(payerName);
+  // Shown on the payer's bank name enquiry, after the business name.
+  const accountName = `${env.PAGA_PAYEE_NAME} ${payerName}`.slice(0, 60);
+  const callback = callbackUrl();
+  const referenceNumber = pagaCallReference("jvsa");
+  const destination = "VIRTUAL_ACCOUNT";
+
+  const body = {
+    referenceNumber,
+    accountReference: reference,
+    accountName,
+    firstName,
+    lastName,
+    ...(phoneNumber ? { phoneNumber } : {}),
+    ...(email ? { email } : {}),
+    status: "ACTIVE",
+    autoSweep: { destination },
+    callbackUrl: callback,
+  };
+
+  let res;
+  try {
+    res = await pagaRequest<PagaSubsidiaryAccountResponse>({
+      path: "/subsidiary-accounts",
+      body,
+      // referenceNumber + accountReference + iifiNumber + autoSweep.bankPublicId
+      // + autoSweep.destination + autoSweep.accountNumber + callbackUrl.
+      hashParts: [referenceNumber, reference, "", "", destination, "", callback],
+    });
+  } catch (err) {
+    console.error("[Paga] subsidiary account context", {
+      error: err instanceof Error ? err.message : String(err),
+      baseUrl: env.PAGA_BASE_URL,
+      callbackHost: new URL(callback).host,
+      accountReferenceLength: reference.length,
+      payerFields: Object.keys(body).filter((key) => key === "phoneNumber" || key === "email"),
+    });
+    throw err;
+  }
+
+  const accountNumber = String(res.data.accountNumber ?? "");
+  if (!accountNumber) {
+    throw new GatewayError("paga", "Paga created the account but returned no account number", {
+      raw: res.data,
+    });
+  }
+
+  return {
+    gatewayAccountId: String(res.data.accountReference ?? reference),
+    accountNumber,
+    accountName,
+    bankCode: "",
+    bankName: "Paga",
+    expiryAt: new Date(Date.now() + args.expirySeconds * 1000),
+    // Fees are taken by Paga on settlement (clearingFeeAmount), not added here.
+    totalCharged: args.amount,
+  };
+}
+
+/**
+ * Confirms a subsidiary-account payment from Paga's own ledger: the sum of
+ * successful CREDIT entries on the account named by our reference.
+ */
+async function verifySubsidiaryPayment(reference: string): Promise<VerifiedPayment | null> {
+  const end = new Date(Date.now() + 5 * 60 * 1000);
+  const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const startUtc = pagaUtc(start);
+  const endUtc = pagaUtc(end);
+  const referenceNumber = pagaCallReference("jvsh");
+  const query = new URLSearchParams({
+    referenceNumber,
+    startDateTimeUTC: startUtc,
+    endDateTimeUTC: endUtc,
+    pageSize: "50",
+    pageNumber: "0",
+  });
+
+  const res = await pagaRequest<PagaSubsidiaryHistoryResponse>({
+    method: "GET",
+    path: `/subsidiary-accounts/${encodeURIComponent(reference)}/history?${query.toString()}`,
+    // History hashes accountIdentifier + start + end; referenceNumber is not hashed.
+    hashParts: [reference, startUtc, endUtc],
+  });
+
+  const credits = (res.data.transactions ?? []).filter(
+    (entry) =>
+      String(entry.transactionType ?? "").toUpperCase() === "CREDIT" &&
+      ["SUCCESSFUL", "SUCCESS", "COMPLETED"].includes(String(entry.status ?? "").toUpperCase()),
+  );
+  const paid = credits.reduce((sum, entry) => sum + Number(String(entry.amount ?? 0).replace(/,/g, "")), 0);
+
+  return {
+    status: paid > 0 ? "success" : "pending",
+    gatewayId: reference,
+    amountPaidMinor: toMinor(paid, "NGN"),
+    gatewayFeeMinor: 0,
+    currency: "NGN",
+    paidAt: paid > 0 ? new Date() : null,
+  };
+}
+
 export const pagaAdapter: PaymentGateway = {
   name: "paga",
   // Collect takes the payer's details on the request itself; there is no
@@ -135,6 +297,9 @@ export const pagaAdapter: PaymentGateway = {
   async createVirtualAccount(
     args: CreateVirtualAccountArgs,
   ): Promise<CreateVirtualAccountResult> {
+    if (env.PAGA_COLLECT_MODE === "subsidiary") {
+      return createSubsidiaryAccount(args);
+    }
     const amount = toMajor(args.amount, args.currency);
     const phoneNumber = args.customerPhone?.trim() || "";
     const email = args.customerEmail?.trim() || "";
@@ -335,6 +500,9 @@ export const pagaAdapter: PaymentGateway = {
   },
 
   async verifyPayment(reference: string): Promise<VerifiedPayment | null> {
+    if (env.PAGA_COLLECT_MODE === "subsidiary") {
+      return verifySubsidiaryPayment(reference);
+    }
     const res = await pagaRequest<PagaStatusResponse>({
       path: "/status",
       body: { referenceNumber: reference },
