@@ -70,7 +70,9 @@ export function verifyPagaSignature(
   if (!payload) return false;
 
   const provided = (
-    pickHeader(headers, "x-paga-hash") ?? String(payload.hash ?? "")
+    pickHeader(headers, "x-paga-hash-v3") ??
+    pickHeader(headers, "x-paga-hash") ??
+    String(payload.hash ?? "")
   )
     .trim()
     .toLowerCase();
@@ -78,7 +80,9 @@ export function verifyPagaSignature(
 
   const candidates: string[] = [];
 
-  const parametersHeader = pickHeader(headers, "x-paga-hash-parameters");
+  const parametersHeader =
+    pickHeader(headers, "x-paga-hash-v3-parameters") ??
+    pickHeader(headers, "x-paga-hash-parameters");
   if (parametersHeader) {
     const fields = parametersHeader
       .split(",")
@@ -89,6 +93,14 @@ export function verifyPagaSignature(
       field.toLowerCase() === "hashkey" ? "" : readField(payload, field),
     );
     candidates.push(values.join(""));
+  }
+
+  // Subsidiary funding (v3): transactionReference + transactionDate + amount
+  // + accountNumber + timestamp. timestamp may be absent from the body.
+  if (payload.transactionReference !== undefined && payload.transactionDate !== undefined) {
+    candidates.push(
+      `${readField(payload, "transactionReference")}${readField(payload, "transactionDate")}${readField(payload, "amount")}${readField(payload, "accountNumber")}${readField(payload, "timestamp")}`,
+    );
   }
 
   // Persistent payment account notification: transactionReference + accountNumber + amount.
@@ -115,6 +127,23 @@ export function verifyPagaSignature(
 }
 
 const FAILED_STATES = new Set(["FAILED", "CANCELLED", "EXPIRED"]);
+
+/**
+ * Subsidiary-account funding notification: an inbound transfer to one of our
+ * subsidiary accounts. It carries transactionReference + accountNumber and no
+ * externalReferenceNumber or event name.
+ */
+export function isPagaFundingNotification(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const body = payload as Record<string, unknown>;
+  return (
+    Boolean(body.transactionReference) &&
+    Boolean(body.accountNumber) &&
+    !body.externalReferenceNumber &&
+    !body.event &&
+    String(body.statusCode ?? "0") === "0"
+  );
+}
 
 /**
  * Maps a Paga Collect callback onto the platform's normalized payment events.
@@ -180,6 +209,9 @@ export function parsePagaEvent(payload: unknown): NormalizedEvent | null {
 export function getPagaEventId(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const body = payload as Record<string, unknown>;
+  if (isPagaFundingNotification(body)) {
+    return `funding:${readField(body, "transactionReference")}`;
+  }
   const notification = readField(body, "notificationId");
   if (notification) return notification;
   const reference = readField(body, "externalReferenceNumber");
@@ -190,5 +222,6 @@ export function getPagaEventId(payload: unknown): string | null {
 export function getPagaEventType(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const body = payload as Record<string, unknown>;
+  if (isPagaFundingNotification(body)) return "SUBSIDIARY_FUNDING";
   return readField(body, "event") || readField(body, "state") || null;
 }

@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { merchants } from "../../db/schema/merchants.js";
 import { webhookEvents } from "../../db/schema/platform.js";
-import { transactions } from "../../db/schema/transactions.js";
+import { paymentAccounts, transactions } from "../../db/schema/transactions.js";
 import {
   getWebhookEventId,
   getWebhookEventType,
@@ -16,11 +16,12 @@ import {
   getPagaEventType,
 } from "../../gateways/paga/webhook.js";
 import { getGateway } from "../../gateways/registry.js";
+import { isPagaFundingNotification } from "../../gateways/paga/webhook.js";
 import type { GatewayName, NormalizedEvent } from "../../gateways/types.js";
 import { recordAudit } from "../../lib/audit.js";
 import { sendReceiptEmail } from "../verify/notify.js";
 import { notifyMerchantOfPayment } from "../merchants/notify.js";
-import { toMajor } from "../../lib/money.js";
+import { toMajor, toMinor } from "../../lib/money.js";
 import { newId } from "../../lib/short-code.js";
 import {
   markPayoutCompletedByRef,
@@ -209,9 +210,27 @@ export async function ingestPagaWebhook(
     };
   }
 
-  const reference = String(
+  // Subsidiary-account funding notifications identify the account only by its
+  // NUBAN, so map that back to the payment it was issued for.
+  const funding = isPagaFundingNotification(payload);
+  let reference = String(
     payload.externalReferenceNumber ?? payload.referenceNumber ?? "",
   ).trim();
+  if (funding) {
+    const accountNumber = String(payload.accountNumber ?? "").trim();
+    const [row] = await db
+      .select({ reference: transactions.reference })
+      .from(paymentAccounts)
+      .innerJoin(transactions, eq(paymentAccounts.transactionId, transactions.id))
+      .where(and(eq(paymentAccounts.gateway, "paga"), eq(paymentAccounts.accountNumber, accountNumber)))
+      .limit(1);
+    reference = row?.reference ?? "";
+    if (!reference) {
+      console.error("[Paga] Funding notification for an unknown account", {
+        accountNumberLast4: accountNumber.slice(-4),
+      });
+    }
+  }
   const eventId = getPagaEventId(payload);
   if (!reference || !eventId) {
     return {
@@ -245,7 +264,18 @@ export async function ingestPagaWebhook(
   });
 
   try {
-    const normalized = gateway.parseWebhookEvent(payload);
+    const normalized: NormalizedEvent | null = funding
+      ? {
+          type: "charge.success",
+          gatewayId: String(payload.transactionReference ?? reference),
+          reference,
+          amountPaid: toMinor(Number(String(payload.amount ?? 0).replace(/,/g, "")), "NGN"),
+          gatewayFee: toMinor(Number(payload.clearingFeeAmount ?? 0), "NGN"),
+          currency: "NGN",
+          paidAt: new Date(),
+          raw: payload,
+        }
+      : gateway.parseWebhookEvent(payload);
 
     if (normalized?.type === "charge.success") {
       const verified = await gateway.verifyPayment?.(normalized.reference);

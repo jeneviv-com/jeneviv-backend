@@ -165,6 +165,14 @@ export const env = {
     .split(",")
     .map((method) => method.trim().toUpperCase())
     .filter(Boolean),
+  // How Paga issues the account a payer transfers to:
+  //   subsidiary       -> one Subsidiary Account per payment (POST /subsidiary-accounts),
+  //                       auto-swept to the Paga business account. Default.
+  //   payment_request  -> a dynamic Payment Request (POST /paymentRequest).
+  PAGA_COLLECT_MODE: (optional("PAGA_COLLECT_MODE", "subsidiary").trim().toLowerCase() ===
+  "payment_request"
+    ? "payment_request"
+    : "subsidiary") as "subsidiary" | "payment_request",
   // Where Paga posts payment-request notifications. Defaults to this API.
   PAGA_CALLBACK_URL: optionalUrl("PAGA_CALLBACK_URL", ""),
 
