@@ -34,6 +34,9 @@ import { ensureMerchantSubaccount } from "../merchants/service.js";
 import { applyVerifiedCharge } from "../webhooks/service.js";
 import { getGateway } from "../../gateways/registry.js";
 import type { InitPaymentInput } from "./schemas.js";
+import { normaliseNgPhone } from "../../lib/phone.js";
+
+
 
 const REFERENCE_ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -370,7 +373,13 @@ export async function initPayment(
 
   // Paga signs the payer's phone number into the request body. Every other
   // gateway ignores it.
-  const payerPhone = validatedValues.find((v) => v.type === "phone")?.value;
+  // Prefer a Phone-type field; otherwise accept a text field labelled "phone"
+  // (collections often add "Phone number" as plain text). Normalise to the
+  // 11-digit local form Paga's examples use.
+  const phoneField =
+    validatedValues.find((v) => v.type === "phone") ??
+    validatedValues.find((v) => /phone|mobile|tel\b|whatsapp/i.test(v.displayName));
+  const payerPhone = normaliseNgPhone(phoneField?.value);
 
   const createVirtual = (code: string | undefined) =>
     gateway.createVirtualAccount({
