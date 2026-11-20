@@ -93,14 +93,50 @@ export async function listCollectionTransactionsForMerchant(
   if (query.settled === false) filters.push(isNull(transactions.settledAt));
 
   const rows = await db
-    .select()
+    .select({
+      transaction: transactions,
+      payerName: users.name,
+      payerEmail: users.email,
+    })
     .from(transactions)
+    .leftJoin(users, eq(users.id, transactions.customerId))
     .where(and(...filters))
     .orderBy(desc(transactions.createdAt))
     .limit(query.limit)
     .offset(query.offset);
 
-  return { transactions: rows };
+  if (rows.length === 0) return { transactions: [] };
+
+  const fieldsByTransaction = await loadFieldValues(
+    rows.map((row) => row.transaction.id),
+  );
+
+  return {
+    transactions: rows.map((row) => ({
+      ...row.transaction,
+      payer_name: row.payerName,
+      payer_email: row.payerEmail,
+      collection_name: collection.name,
+      field_values: fieldsByTransaction.get(row.transaction.id) ?? {},
+    })),
+  };
+}
+
+/** Payer form answers for a batch of transactions, keyed by transaction id. */
+async function loadFieldValues(
+  transactionIds: string[],
+): Promise<Map<string, Record<string, string>>> {
+  const fields = await db.query.transactionFields.findMany({
+    where: inArray(transactionFields.transactionId, transactionIds),
+    orderBy: asc(transactionFields.fieldId),
+  });
+  const byTransaction = new Map<string, Record<string, string>>();
+  for (const field of fields) {
+    const values = byTransaction.get(field.transactionId) ?? {};
+    values[field.fieldId] = field.value;
+    byTransaction.set(field.transactionId, values);
+  }
+  return byTransaction;
 }
 
 /**
@@ -135,19 +171,9 @@ export async function listTransactionsForMerchant(
 
   if (rows.length === 0) return { transactions: [] };
 
-  const fields = await db.query.transactionFields.findMany({
-    where: inArray(
-      transactionFields.transactionId,
-      rows.map((row) => row.transaction.id),
-    ),
-    orderBy: asc(transactionFields.fieldId),
-  });
-  const fieldsByTransaction = new Map<string, Record<string, string>>();
-  for (const field of fields) {
-    const values = fieldsByTransaction.get(field.transactionId) ?? {};
-    values[field.fieldId] = field.value;
-    fieldsByTransaction.set(field.transactionId, values);
-  }
+  const fieldsByTransaction = await loadFieldValues(
+    rows.map((row) => row.transaction.id),
+  );
 
   return {
     transactions: rows.map((row) => ({
